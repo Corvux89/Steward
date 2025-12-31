@@ -1,0 +1,26 @@
+# Directories
+.VSCodeCounter
+.vscode/*
+
+# Built Visual Studio Code Extensions
+*.vsix
+.vs/
+
+# User-specific stuff
+.idea
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# Environments
+*.env
+*.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+progress.png
