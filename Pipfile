@@ -6,7 +6,9 @@ name = "pypi"
 [packages]
 pipenv = "*"
 py-cord = "==2.7.0"
-sqlalchemy = "*"
+marshmallow = "*"
+sqlalchemy = {extras = ["asyncio"], version = "*"}
+asyncpg = "*"
 
 [dev-packages]
 
