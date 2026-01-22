@@ -19,3 +19,18 @@ class WebhookType(StewardEnum):
     npc = auto()
     adventure = auto()
     character = auto()
+
+class ApplicationType(StewardEnum):
+    new = "New Character"
+    death = "Death Reroll"
+    freeroll = "Free Reroll"
+    level = "Level Up"
+
+class LogEvent(StewardEnum):
+    player_update = "Player Update"
+    new_character = "New Character"
+    edit_character = "Edit Character"
+    level_up = "Level Up"
+    activity = "Activity"
+    reward = "Reward"
+    null_log = "Null Log"

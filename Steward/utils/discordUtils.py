@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import re
 from typing import Union
 import discord
@@ -6,10 +7,25 @@ import discord
 from Steward.models.objects.exceptions import StewardCommandError
 from constants import BOT_OWNERS
 
+log = logging.getLogger(__name__)
+
 def dm_check(ctx: discord.ApplicationContext) -> bool:
     if not ctx.guild:
         raise StewardCommandError("Command is not available in DM's")
     return True
+
+def is_owner(ctx: discord.ApplicationContext) -> bool:
+    return ctx.author.id in BOT_OWNERS
+
+def is_admin(ctx: discord.ApplicationContext) -> bool:
+    return is_owner(ctx) or ctx.author.guild_permissions.administrator
+
+async def is_staff(ctx: discord.ApplicationContext) -> bool:
+    from Steward.models.objects.servers import Server
+    server = await Server.get_or_create(ctx.bot.db, ctx.guild)
+    member = ctx.author
+    
+    return is_admin(ctx) or (server.staff_role and server.staff_role in member.roles)
 
 
 def get_positivity(string) -> bool:
@@ -96,7 +112,7 @@ def auth_and_chan(ctx) -> bool:
 
     return chk
 
-# TODO: THis will need updating
+# TODO: This will need updating
 def process_message(
     message: str, g , member: discord.Member = None, mappings: dict = None
 ) -> str:
@@ -194,7 +210,8 @@ async def try_delete(message: discord.Message) -> None:
     """
     try:
         await message.delete()
-    except:
+    except Exception as e:
+        log.info(e)
         pass
 
 

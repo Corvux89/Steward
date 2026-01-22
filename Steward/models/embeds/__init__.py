@@ -1,6 +1,11 @@
+from typing import TYPE_CHECKING
 import discord
 
+from Steward.models.objects.character import Character
 from Steward.utils.discordUtils import chunk_text
+
+if TYPE_CHECKING:
+    from Steward.models.objects.player import Player
 
 class ErrorEmbed(discord.Embed):
     def __init__(self, description, *args, **kwargs):
@@ -8,6 +13,24 @@ class ErrorEmbed(discord.Embed):
         kwargs["color"] = discord.Color.brand_red()
         kwargs["description"] = kwargs.get("description", description)
         super().__init__(**kwargs)
+
+class PlayerEmbed(discord.Embed):
+    def __init__(self, player: "Player", *args, **kwargs):
+        super().__init__(**kwargs)
+
+        self.color=player.color
+
+        self.set_author(
+            name=player.display_name,
+            icon_url=player.display_avatar.url if player.display_avatar else None
+        )
+
+class CharacterEmbed(PlayerEmbed):
+    def __init__(self, player: "Player", character: "Character", *args, **kwargs):
+        super().__init__(player, *args, **kwargs)
+        self.set_thumbnail(
+            url=(player.display_avatar.url if player.display_avatar else character.avatar_url if character.avatar_url else None)
+        )
 
 class PaginatedEmbed(discord.Embed):
     EMBED_MAX = 6000

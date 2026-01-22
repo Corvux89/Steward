@@ -12,3 +12,6 @@ class StewardError(discord.ApplicationCommandError):
 class CharacterNotFound(StewardError):
     def __init__(self, member):
         super().__init__(f"No character information found for {member.mention}")
+
+class TransactionError(StewardError):
+    pass

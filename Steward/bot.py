@@ -3,31 +3,50 @@ from typing import Union
 import discord
 import logging
 from discord.ext import commands
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine, AsyncConnection
-from sqlalchemy.schema import CreateTable
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
 from timeit import default_timer as timer
 
 from Steward.models import metadata
 from Steward.models.embeds import ErrorEmbed
-from Steward.models.objects.guilds import StewardGuild
-from Steward.models.objects.player import Player
 from Steward.models.objects.exceptions import StewardCommandError, StewardError
-from constants import DB_URL, ERROR_CHANNEL    
+from Steward.utils.discordUtils import try_delete
+from constants import DB_URL, ERROR_CHANNEL 
+
+# Important for metadata initiation
+from Steward.models.objects.npc import NPC
+from Steward.models.objects.activityPoints import ActivityPoints
+from Steward.models.objects.character import Character
+from Steward.models.objects.log import StewardLog
+from Steward.models.objects.levels import Levels
+from Steward.models.objects.servers import Server
+from Steward.models.objects.player import Player
+from Steward.models.objects.activity import Activity
+
 
 log = logging.getLogger(__name__)
 
-async def create_tables(conn: AsyncConnection):
-    for table in metadata.sorted_tables:
-        await conn.execute(CreateTable(table, if_not_exists=True))
-
-class StewardContext(discord.ApplicationContext):
+class StewardContext(commands.Context):
     bot: "StewardBot"
     player: "Player"
-    guild: "StewardGuild"
+    server: "Server"
 
     def __init__(self, **kwargs):
-        super(StewardContext).__init__(**kwargs)
-        # self.player: Player = None
+        super().__init__(**kwargs)
+        self.player = None
+        self.server = None
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__} author={self.author.id:!r} channel={self.channel.name:!r}"
+
+class StewardApplicationContext(discord.ApplicationContext):
+    bot: "StewardBot"
+    player: "Player"
+    server: "Server"
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.player = None
+        self.server = None
 
     def __repr__(self):
         return f"<{self.__class__.__name__} author={self.author.id:!r} channel={self.channel.name:!r}"
@@ -45,14 +64,13 @@ class StewardBot(commands.Bot):
     async def on_ready(self):
         db_start = timer()
         self.db = create_async_engine(DB_URL)
-        self.dispatch("db_connected")
+        
+        async with self.db.begin() as conn:
+            await conn.run_sync(metadata.create_all)
 
         db_end = timer()
-
         log.info(f"Time to create db engine: {db_end - db_start:.2f}")
-
-        async with self.db.begin() as conn:
-            await create_tables(conn)
+        self.dispatch("db_connected")
 
         log.info(f"Logged in as {self.user} (ID: {self.user.id})")
         log.info("------")
@@ -63,6 +81,9 @@ class StewardBot(commands.Bot):
             self.db.dispose()
 
         await super().close()
+
+    async def on_error(self, context, exception):
+        await self.error_handling(context, exception)
 
     async def on_command_error(self, context, exception):
         await self.error_handling(context, exception)
@@ -82,10 +103,13 @@ class StewardBot(commands.Bot):
         raise StewardError(f"Try again in a few seconds. I'm not fully ready yet.")
     
     async def before_invoke_setup(self, ctx: Union[discord.ApplicationContext, commands.Context]):
+        if not hasattr(self, "db") or not self.db:
+            raise StewardCommandError(f"Try again in a few seconds. I'm not fully ready yet.")
+
         ctx: StewardContext = ctx
 
         ctx.player = await Player.get_or_create(self.db, ctx.author)
-        ctx.guild = await StewardGuild.get_or_create(self.db, ctx.guild)
+        ctx.server = await Server.get_or_create(self.db, ctx.guild)
 
         # Statistics
         await ctx.player.update_command_count(str(ctx.command))
@@ -104,7 +128,7 @@ class StewardBot(commands.Bot):
 
         try:
             log.info(
-                f"cmd: chan {ctx.channel} [{ctx.channel.id}], serv: {f'{ctx.guild.name} [{ctx.guild.id}]' if ctx.guild.id else 'DM'}, "
+                f"cmd: chan {ctx.channel} [{ctx.channel.id}], serv: {f'{ctx.server.name} [{ctx.server.id}]' if ctx.server.id else 'DM'}, "
                 f"auth: {ctx.author} [{ctx.author.id}]: {ctx.command}  {params}"
             )
         except AttributeError as e:
@@ -154,7 +178,10 @@ class StewardBot(commands.Bot):
             error,
             (StewardError, discord.CheckFailure, StewardCommandError, commands.CheckFailure),
         ):
-            return await ctx.send(embed=ErrorEmbed(error))
+            if isinstance(ctx, discord.Interaction):
+                return await ctx.channel.send(embed=ErrorEmbed(error))
+            else:
+                return await ctx.send(embed=ErrorEmbed(error))
 
         if hasattr(ctx, "bot") and hasattr(ctx.bot, "db"):
             params = (
@@ -183,7 +210,7 @@ class StewardBot(commands.Bot):
                 log.error(out_str)
 
         try:
-            return await ctx.send(
+            await ctx.send(
                 embed=ErrorEmbed(f"Something went wrong. Let us know if it keeps up!")
             )
         except:

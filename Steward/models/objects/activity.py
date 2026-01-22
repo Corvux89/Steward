@@ -1,8 +1,9 @@
+import uuid
 import sqlalchemy as sa
 
 from decimal import Decimal
 from marshmallow import Schema, fields, post_load
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, insert
 from sqlalchemy.ext.asyncio import AsyncEngine
 from Steward.models import metadata
 from Steward.utils.dbUtils import execute_query
@@ -11,46 +12,84 @@ from Steward.utils.dbUtils import execute_query
 class Activity:
     def __init__(self, db: AsyncEngine, **kwargs):
         self._db = db
-
+        self.id = kwargs.get("id")
         self.guild_id = kwargs.get("guild_id")
         self.name = kwargs.get("name")
 
-        self.base_currency_value: int = kwargs.get("base_currency_value")
-        self.base_xp_value:int = kwargs.get("base_xp_value")
-        self.base_currency_ratio: Decimal = kwargs.get("base_currency_ratio")
-        self.base_xp_ratio: Decimal = kwargs.get("base_xp_ratio")
+        self.currency_expr = kwargs.get("currency_expr")
+        self.xp_expr = kwargs.get("xp_expr")
+        self.active = kwargs.get("active", True)
 
         self.limited: bool = kwargs.get("limited", False)
 
-        activity_table = sa.Table(
-            "activities",
-            metadata,
-            sa.Column("guild_id", sa.BigInteger, nullable=False),
-            sa.Column("name", sa.String, nullable=False),
-            sa.Column("base_currency_value", sa.Integer, nullable=True),
-            sa.Column("base_xp_value", sa.Integer, nullable=True),
-            sa.Column("base_currency_ratio", sa.DECIMAL, nullable=True),
-            sa.Column("base_xp_ratio", sa.DECIMAL, nullable=True),
-            sa.Column("limited", sa.BOOLEAN, nullable=False, default=False),
-            sa.PrimaryKeyConstraint("guild_id", "name")
+    activity_table = sa.Table(
+        "activities",
+        metadata,
+        sa.Column("guild_id", sa.BigInteger, nullable=False),
+        sa.Column("name", sa.String, nullable=False),
+        sa.Column("currency_expr", sa.String(500), nullable=True),
+        sa.Column("xp_expr", sa.String(500), nullable=True),
+        sa.Column("limited", sa.BOOLEAN, nullable=False, default=False),
+        sa.Column("active", sa.Boolean, nullable=False, default=True),
+        sa.PrimaryKeyConstraint("guild_id", "name")
+    )
+
+    class ActivitySchema(Schema):
+        db: AsyncEngine
+
+        guild_id = fields.Integer(required=True)
+        name = fields.String(required=True)
+        currency_expr = fields.String(required=True)
+        xp_expr = fields.String(required=True)
+        limited = fields.Boolean(required=True)
+        active = fields.Boolean(required=True)
+
+        def __init__(self, db: AsyncEngine, **kwargs):
+            super().__init__(**kwargs)
+            self.db = db
+        @post_load
+        def make_activity(self, data, **kwargs) -> "Activity":
+            activity = Activity(self.db, **data)
+
+            return activity
+        
+    async def delete(self) -> None:
+        query = (
+            Activity.activity_table.delete()           
+            .where(
+                sa.and_(
+                    Activity.activity_table.c.name == self.name,
+                    Activity.activity_table.c.guild_id == self.guild_id
+                )
+            )
         )
 
-        class ActivitySchema(Schema):
-            db: AsyncEngine
+        await execute_query(self._db, query)
 
-            guild_id = fields.Integer(required=True)
-            name = fields.String(required=True)
-            base_currency_value = fields.Integer(required=False, allow_none=True)
-            base_xp_value = fields.Integer(required=False, allow_none=True)
-            base_currency_ratio = fields.Decimal(required=False, allow_none=True)
-            base_xp_ratio = fields.Decimal(required=False, allow_none=True)
-            limited = fields.Boolean(required=True, load_default=False)
+    async def upsert(self) -> "Activity":
+        update_dict = {
+            "currency_expr": self.currency_expr,
+            "xp_expr": self.xp_expr,
+            "limited": self.limited,
+            "active": self.active
+        }
 
-            def __init__(self, db: AsyncEngine, **kwargs):
-                super().__init__(**kwargs)
-                self.db = db
-            @post_load
-            def make_activity(self, data, **kwargs) -> "Activity":
-                activity = Activity(self.db, **data)
+        insert_dict = {
+            "name": self.name,
+            "guild_id": self.guild_id,
+            **update_dict
+        }
 
-                return activity
+        query = (
+            insert(Activity.activity_table)
+            .values(**insert_dict)
+            .returning(Activity.activity_table)
+            .on_conflict_do_update(
+                index_elements=["guild_id", "name"],
+                set_=update_dict
+            )
+        )
+
+        row = await execute_query(self._db, query)
+
+        return Activity.ActivitySchema(self._db).load(dict(row._mapping))

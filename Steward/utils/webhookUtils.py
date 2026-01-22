@@ -32,7 +32,7 @@ async def handle_character_mentions(webhook: "StewardWebhook") -> None:
     if not (char_mentions := re.findall(r"{\$([^}]*)}", webhook.content)):
         return
     
-    characters = await webhook.ctx.guild.get_all_characters()
+    characters = await webhook.ctx.server.get_all_characters()
     mentioned_characters = set()
 
     for mention in char_mentions:
@@ -44,7 +44,7 @@ async def handle_character_mentions(webhook: "StewardWebhook") -> None:
             mention_char = matches[0]
         elif len(matches) > 1:
             # Cache member lookups
-            member_map = {c: webhook.ctx.guild.get_member(c.player_id) for c in matches}
+            member_map = {c: webhook.ctx.server.get_member(c.player_id) for c in matches}
             choices = [
                 f"{c.name} [{member.display_name}]"
                 for c, member in member_map.items()
@@ -71,10 +71,30 @@ async def handle_character_mentions(webhook: "StewardWebhook") -> None:
 
     # Send notifications after all mentions are processed
     for char in mentioned_characters:
-        if member := webhook.ctx.guild.get_member(char.player_id):
+        if member := webhook.ctx.server.get_member(char.player_id):
             try:
                 await member.send(
                     f"{webhook.player.mention} directly mentioned `{char.mention}` in:\n{webhook.ctx.channel.jump_url}"
                 )
             except:
                 pass
+
+def get_player_name(webhook: "StewardWebhook") -> None:
+    try:
+        player_name = webhook.message.author.name.split(" // ")[1:]
+    except:
+        return None
+    
+    return " // ".join(player_name)
+
+def get_character_name(webhook: "StewardWebhook") -> str:
+    try:
+        char_name = (
+            webhook.message.author.name.split(" // ")[0]
+            .split("] ", 1)[1]
+            .strip()
+        )
+    except:
+        return None
+    
+    return char_name

@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 import discord
 import uuid
 import sqlalchemy as sa
@@ -46,7 +46,7 @@ class NPC:
         key = fields.String(required=True)
         name = fields.String(required=True)
         avatar_url = fields.String(required=False, allow_none=True)
-        roles = fields.List(fields.Integer, required=True, load_default=[])
+        roles = fields.List(fields.Integer, required=True)
         adventure_id = fields.UUID(required=False, allow_none=True)
 
         def __init__(self, db: AsyncEngine, **kwargs):
@@ -89,17 +89,16 @@ class NPC:
             insert(NPC.npc_table)
             .values(**insert_dict)
             .returning(NPC.npc_table)
-        )
-
-        query = query.on_conflict_do_update(
-            index_elements = ["guild_id", "key"],
-            set_=update_dict
+            .on_conflict_do_update(
+                index_elements = ["guild_id", "key"],
+                set_=update_dict
+            )
         )
 
         await execute_query(self._db, query, QueryResultType.none)
 
     async def send_message(self, ctx: discord.ApplicationContext, content: str) -> None:
-        webhook = get_webhook(ctx.channel)
+        webhook = await get_webhook(ctx.channel)
 
         kwargs = {
             "username": self.name,
@@ -113,7 +112,7 @@ class NPC:
         await webhook.send(**kwargs)
 
     async def edit_message(self, ctx: discord.ApplicationContext, message_id: int, content: str) -> None:
-        webhook = get_webhook(ctx.channel)
+        webhook = await get_webhook(ctx.channel)
 
         kwargs = {
             "content": content
@@ -138,8 +137,8 @@ class NPC:
             cmd.add_check(dm_check)
             bot.add_command(cmd)
 
-    @classmethod
-    async def get_all(bot: "StewardBot") -> list["NPC"]:
+    @staticmethod
+    async def get_all(db: AsyncEngine) -> list["NPC"]:
         query = (
             NPC.npc_table.select()
             .order_by(
@@ -147,10 +146,10 @@ class NPC:
             )
         )
 
-        npc_rows = await execute_query(bot.db, query, QueryResultType.multiple)
+        npc_rows = await execute_query(db, query, QueryResultType.multiple)
 
         npcs = [
-            NPC.NPCSchema(bot.db).load(row) for row in npc_rows
+            NPC.NPCSchema(db).load(dict(row._mapping)) for row in npc_rows
         ]
 
         return npcs
