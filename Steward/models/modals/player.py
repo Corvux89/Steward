@@ -18,7 +18,7 @@ class NewCharacterModal(ui.DesignerModal):
             server: Server
     ):
         self.character = character
-        self.server = server
+        self.server = server                
 
         name_input = ui.Label(
             "Character Name",
@@ -121,7 +121,8 @@ class PlayerInformationModal(ui.DesignerModal):
                 value=getattr(self.player, "notes", ""),
                 style=discord.InputTextStyle.long,
                 max_length=2000,
-                custom_id="player_notes"
+                custom_id="player_notes",
+                required=False
             )
         )
 
@@ -130,7 +131,8 @@ class PlayerInformationModal(ui.DesignerModal):
             ui.InputText(
                 placeholder="Campaign",
                 value=getattr(self.player, "campaign", ""),
-                custom_id="player_campaign"
+                custom_id="player_campaign",
+                required=False
             )
         )
 

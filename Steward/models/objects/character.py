@@ -43,6 +43,8 @@ class Character:
         self.currency = kwargs.get("currency", 0)
         self.activity_points = kwargs.get("activity_points", 0)
         self.xp = kwargs.get("xp", 0)
+        self.limited_xp = kwargs.get("limited_xp", 0)
+        self.limited_currency = kwargs.get("limited_currency", 0)
 
     characters_table = sa.Table(
         "characters",
@@ -52,7 +54,7 @@ class Character:
         sa.Column("level", sa.Integer, nullable=False),
         sa.Column("species_str", sa.String, nullable=True),
         sa.Column("class_str", sa.String, nullable=True),
-        sa.Column("guild_id", sa.BigInteger, nullable=False),
+        sa.Column("guild_id", sa.BigInteger, sa.ForeignKey("servers.id"), nullable=False),
         sa.Column("player_id", sa.BigInteger, nullable=False),
         sa.Column("active", sa.BOOLEAN, nullable=False, default=True),
         sa.Column("primary_character", sa.BOOLEAN, nullable=False, default=True),
@@ -62,6 +64,8 @@ class Character:
         sa.Column("currency", sa.DECIMAL, nullable=False),
         sa.Column("activity_points", sa.Integer, nullable=False, default=0),
         sa.Column("xp", sa.Integer, nullable=False, default=0),
+        sa.Column("limited_xp", sa.Integer, nullable=False, default=0),
+        sa.Column("limited_currency", sa.Integer, nullable=False, default=0),
         sa.Index("idx_guild_player", "guild_id", "player_id")
     )
 
@@ -83,6 +87,8 @@ class Character:
         currency = fields.Decimal(required=True, allow_none=False)
         activity_points = fields.Integer(required=True)
         xp = fields.Integer(required=True)
+        limited_xp = fields.Integer(required=True)
+        limited_currency = fields.Integer(required=True)
 
         def __init__(self, db: AsyncEngine, **kwargs):
             super().__init__(**kwargs)
@@ -132,7 +138,9 @@ class Character:
             "nickname": self.nickname,
             "activity_points": self.activity_points,
             "xp": self.xp,
-            "currency": self.currency
+            "currency": self.currency,
+            "limited_xp": self.limited_xp,
+            "limited_currency": self.limited_currency
         }
 
         insert_dict = {
@@ -172,10 +180,10 @@ class Character:
 
         player = await Player.get_or_create(ctx.bot.db, ctx.server.get_member(self.player_id))
         modifier = 1 if increment else -1
-        old_point = ctx.server.get_activity_for_points(self.activity_points)
+        old_point = ctx.server.get_activitypoint_for_points(self.activity_points)
         
         self.activity_points += 1 * modifier
-        new_point = ctx.server.get_activity_for_points(self.activity_points)
+        new_point = ctx.server.get_activitypoint_for_points(self.activity_points)
 
         if (not old_point and new_point) or old_point.level != new_point.level:
             from .log import StewardLog

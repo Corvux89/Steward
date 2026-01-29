@@ -8,7 +8,6 @@ from Steward.models.automation.functions import rand, randint, typeof
 from Steward.models.automation.exceptions import InvalidExpression, StewardValueError, LimitException
 from Steward.models.automation.context import AutomationContext
 
-
 class SafeObject:
     """Base class for safe wrapper objects that restricts access to dangerous methods"""
     _allowed_attrs = set()  # Override in subclasses
@@ -44,7 +43,7 @@ class SafeCharacter(SafeObject):
     """Safe wrapper for Character objects - read-only access"""
     _allowed_attrs = {
         'id', 'name', 'player_id', 'guild_id', 'level', 'xp',
-        'currency', 'primary_character', 'nickname', 'activity_points'
+        'currency', 'primary_character', 'nickname', 'activity_points', 'mention'
     }
     _allowed_methods = set()  
 
@@ -52,7 +51,8 @@ class SafeCharacter(SafeObject):
 class SafePlayer(SafeObject):
     """Safe wrapper for Player objects - read-only access"""
     _allowed_attrs = {
-        'id', 'guild_id', 'campaign', 'primary_character'
+        'id', 'guild_id', 'campaign', 'primary_character', 'highest_level_character', 'mention', 'name', 'display_name', 
+        'avatar', 'staff_points', 'bot'
     }
     _allowed_methods = set()
 
@@ -64,7 +64,7 @@ class SafeServer(SafeObject):
     }
     _allowed_methods = {
         'get_xp_for_level', 'get_level_for_xp', 'get_activity_for_points', 'max_characters',
-        'currency_limit', 'xp_limit', 'xp_global_limit'
+        'currency_limit', 'xp_limit', 'xp_global_limit', 'get_tier_for_level'
     }
 
 class SafeNPC(SafeObject):
@@ -74,6 +74,20 @@ class SafeNPC(SafeObject):
     }
     _allowed_methods = set()  
 
+class SafeLog(SafeObject):
+    _allowed_attrs = {
+        'id', 'author', 'player', 'event', 'activity', 'currency', 'xp', 'notes',
+        'invalid', 'character'
+    }
+
+    _allowed_methods = set()
+
+
+def safe_getattr(obj, attr, default=''):
+    """Safely get an attribute from an object, returning default if obj is None or attr doesn't exist"""
+    if obj is None:
+        return default
+    return getattr(obj, attr, default)
 
 DEFAULT_BUILTINS = {
     "floor": floor,
@@ -96,7 +110,8 @@ DEFAULT_BUILTINS = {
     "int": int,
     "float": float,
     "str": str,
-    "bool": bool
+    "bool": bool,
+    "getattr": safe_getattr
 }
 
 class StewardConfig:
@@ -398,30 +413,31 @@ def evaluate_expression(
     from Steward.models.objects.player import Player
     from Steward.models.objects.servers import Server
     from Steward.models.objects.npc import NPC
+    from Steward.models.objects.log import StewardLog
     
     evaluator = StewardEvaluator()
     
     names = {}
     if context:
-        context_dict = context.to_dict()
+        context_dict = {}
+        for key, value in context.__dict__.items():
+            if not key.startswith('_'):
+                context_dict[key] = value
         
-        # First pass: Find and wrap character
-        player: Player = context_dict.get('player')
-        character: Character = context_dict.get('character')
-        server: Server = context_dict.get('server')
-        
-        # Second pass: Wrap all objects
+        # Wrap all objects
         for key, value in context_dict.items():
-            if isinstance(value, Character):
-                wrapped = SafeCharacter(value)
-                names[key] = wrapped
+            if value is None:
+                names[key] = None
+            elif isinstance(value, Character):
+                names[key] = SafeCharacter(value)
             elif isinstance(value, Player):
                 names[key] = SafePlayer(value)
             elif isinstance(value, Server):
-                # Pass character to SafeServer for context-aware methods
                 names[key] = SafeServer(value)
             elif isinstance(value, NPC):
                 names[key] = SafeNPC(value)
+            elif isinstance(value, StewardLog):
+                names[key] = SafeLog(value)
             else:
                 names[key] = value
     

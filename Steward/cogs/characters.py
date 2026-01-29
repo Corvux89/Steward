@@ -3,10 +3,14 @@ import logging
 
 from discord.ext import commands
 from Steward.bot import StewardBot, StewardContext
-from Steward.models.objects.exceptions import CharacterNotFound
+from Steward.models.modals.reward import RewardModal
+from Steward.models.objects.exceptions import CharacterNotFound, StewardError
 from Steward.models.objects.player import Player
+from Steward.models.objects.servers import Server
 from Steward.models.objects.webhook import StewardWebhook
 from Steward.models.views.player import PlayerInfoView
+from Steward.models.views.request import BastRequestReviewView, Requestview
+from Steward.utils.autocompleteUtils import activity_autocomplete, character_autocomplete
 from Steward.utils.discordUtils import dm_check, is_admin, is_staff, try_delete
 
 
@@ -21,6 +25,10 @@ class CharacterCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         log.info(f"Cog '{self.__cog_name__}' loaded")
+
+    @commands.Cog.listener()
+    async def on_db_connected(self):
+        self.bot.add_view(BastRequestReviewView.new(self.bot))
 
     character_admin_commands = discord.SlashCommandGroup(
         "character_admin",
@@ -53,6 +61,29 @@ class CharacterCog(commands.Cog):
         await ctx.send(view=ui)
         await ctx.delete()
 
+    @character_admin_commands.command(
+            name="reward",
+            description="Give a player an activity reward"
+    )
+    async def player_reward(self,
+                            ctx: "StewardContext",
+                            member: discord.Option(
+                                discord.SlashCommandOptionType(6),
+                                description="Player to reward",
+                                required=True
+                            )
+                            ):
+        if not ctx.server.activities:
+            raise StewardError("No activities are setup for reward. Contact an admin.")
+        
+        player = await Player.get_or_create(self.bot.db, member)
+        
+        if not player.active_characters:
+            raise CharacterNotFound(player)
+
+        modal = RewardModal(self.bot, player, ctx.server)
+        await ctx.send_modal(modal)       
+
 
     @commands.slash_command(
         name="info",
@@ -79,13 +110,27 @@ class CharacterCog(commands.Cog):
         await ctx.delete()
 
     @commands.slash_command(
-        name="request",
+        name="submit",
         description="Make a request"
     )
     async def staff_request(
         self,
-        ctx: "StewardContext"
+        ctx: "StewardContext",
+        character: discord.Option(
+            str,
+            description="Character to request for",
+            autocomplete=character_autocomplete
+        ),
     ):
-        pass
+        character = next(
+            (c for c in ctx.player.active_characters if c.name == character),
+            None
+        )
 
+        if not character:
+            raise CharacterNotFound(ctx.player)
+        
+        ui = Requestview(self.bot, ctx, ctx.player, character)
+        await ctx.send(view=ui)
+        await ctx.delete()
 

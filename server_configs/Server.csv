@@ -1,0 +1,2 @@
+"Max Level","Currency Limit Expression","XP Limit Expression","Global XP Limit","Max Characters Expression","Activity Character Count Threshold","Activity Excluded Channels","Currency Label","Staff Role ID","Staff Request Channel ID"
+3,"750*server.get_tier_for_level(player.highest_level_character.level)","500*server.get_tier_for_level(player.highest_level_character.level)","max(900,server.get_xp_for_level(character.level+1))","2",1,"[]","gp",1461451273852293388,""

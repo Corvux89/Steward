@@ -8,19 +8,21 @@ from Steward.models.objects.enum import QueryResultType
 from Steward.utils.dbUtils import execute_query
 
 class Levels:
-    def __init__(self, db: AsyncEngine, guild_id: int, level: int, xp: int):
+    def __init__(self, db: AsyncEngine, guild_id: int, level: int, xp: int, tier: int):
         self._db = db
 
         self.guild_id = guild_id
         self.level = level
+        self.tier = tier
         self.xp = xp
 
     level_table = sa.Table(
         "ref_levels",
         metadata,
-        sa.Column("guild_id", sa.BigInteger, nullable=False),
+        sa.Column("guild_id", sa.BigInteger, sa.ForeignKey("servers.id"), nullable=False),
         sa.Column("level", sa.Integer, nullable=False),
         sa.Column("xp", sa.Integer, nullable=False),
+        sa.Column("tier", sa.Integer, nullable=True),
         sa.PrimaryKeyConstraint("guild_id", "level")
     )
 
@@ -30,6 +32,7 @@ class Levels:
         guild_id = fields.Integer(required=True)
         level = fields.Integer(required=True)
         xp = fields.Integer(required=True)
+        tier = fields.Integer(required=False, allow_none=True)
 
         def __init__(self, db: AsyncEngine, **kwargs):
             super().__init__(**kwargs)
@@ -55,7 +58,8 @@ class Levels:
 
     async def upsert(self) -> "Levels":
         update_dict = {
-            "xp": self.xp
+            "xp": self.xp,
+            "tier": self.tier
         }
 
         insert_dict = {

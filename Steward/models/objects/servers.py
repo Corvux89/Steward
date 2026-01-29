@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import TYPE_CHECKING, List, Union
+from typing import TYPE_CHECKING, List, Optional, Union
 import discord
 import sqlalchemy as sa
 import asyncio
@@ -230,7 +230,12 @@ class Server(discord.Guild):
 
         query = (
             Activity.activity_table.select()
-            .where(Activity.activity_table.c.guild_id == self.id)
+            .where(
+                sa.and_(
+                    Activity.activity_table.c.guild_id == self.id,
+                    Activity.activity_table.c.active == True
+                )
+            )
         )
 
         rows = await execute_query(self._db, query, QueryResultType.multiple)
@@ -273,6 +278,7 @@ class Server(discord.Guild):
         await server.load_npcs()
         await server.load_acitvity_points()
         await server.load_levels()
+        await server.load_activities()
         
         return server
     
@@ -349,6 +355,13 @@ class Server(discord.Guild):
             
         return 0
     
+    def get_tier_for_level(self, level: int) -> int:
+        for l in self.levels:
+            if level == l.level:
+                return l.tier
+            
+        return 0
+    
     def get_level_for_xp(self, xp: int) -> int:
         level = 0
 
@@ -358,7 +371,7 @@ class Server(discord.Guild):
 
         return level
     
-    def get_activity_for_points(self, points: int) -> "ActivityPoints":
+    def get_activitypoint_for_points(self, points: int) -> "ActivityPoints":
         point = None
 
         for a in self.activity_points:
@@ -416,5 +429,13 @@ class Server(discord.Guild):
             return None
         
     @property
-    def currency_str(self):
+    def currency_str(self) -> str:
         return str(self.currency_label) if self.currency_label and self.currency_label != "" else "Currency"
+    
+    def get_activity(self, act_name: str) -> Optional["Activity"]:
+        if not self.activities:
+            return None
+        
+        for activity in self.activities:
+            if activity.name.lower() == act_name.lower():
+                return activity

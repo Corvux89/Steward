@@ -3,25 +3,27 @@ import discord
 import discord.ui as ui
 
 from Steward.bot import StewardBot, StewardContext
-from Steward.models.modals.player import NewCharacterModal, PlayerInformationModal
+from Steward.models.modals.player import PlayerInformationModal
 from Steward.models.modals import confirm_modal, get_value_modal
 from Steward.models.objects.character import Character
-from Steward.models.objects.enum import ApplicationType, LogEvent, RuleTrigger
+from Steward.models.objects.enum import ApplicationType, LogEvent
 from Steward.models.objects.log import StewardLog
 from Steward.models.objects.player import Player
 from Steward.models.views import StewardView
-from Steward.utils.discordUtils import chunk_text, try_delete
-from Steward.utils.viewUitils import get_character_header, get_character_info_sections, get_character_select_option, get_player_header
+from Steward.utils.discordUtils import try_delete
+from Steward.utils.viewUitils import get_character_info_sections, get_character_select_option
 from constants import EDIT_EMOJI
 
 log = logging.getLogger(__name__)
 
+# TODO: New Character
+# TODO: Reroll Character
 
 class BaseInfoView(StewardView):
     __copy_attrs__ = [
-        'bot', 'ctx', 'player', 'staff', 
-        'character', 'admin', 'application_type', 'new_character', 
-        'reroll_character'
+        'bot', 'ctx', 'player', 
+        'staff', 'character', 'admin', 
+        'new_character', 'reroll_character', 'application_type'
     ]
 
     bot: StewardBot
@@ -31,6 +33,9 @@ class BaseInfoView(StewardView):
     admin: bool
     character: Character
     delete_on_timeout: bool
+
+    async def on_timeout_callback(self, _: discord.Interaction):
+        await self.on_timeout()
 
     async def on_timeout(self):
         if (
@@ -65,7 +70,12 @@ class PlayerInfoView(BaseInfoView):
         separator = ui.Separator()
 
         container = ui.Container(
-            get_player_header(self.player),
+            ui.Section(
+                ui.TextDisplay(f"{self.player.mention}"),
+                accessory=ui.Thumbnail(
+                    url=f"{self.player.avatar.url}"
+                )
+            ),
             separator
         )
 
@@ -91,15 +101,8 @@ class PlayerInfoView(BaseInfoView):
                     style=discord.ButtonStyle.green,
                     custom_id="new_character"
                 )
-                new_character_button.callback = self._on_new_character_button
+                # TODO: New Character Callback
                 row_1_buttons.append(new_character_button)
-
-            exit_button = ui.Button(
-                label="Quit",
-                style=discord.ButtonStyle.red
-            )
-            exit_button.callback = self.timeout_callback
-            row_1_buttons.append(exit_button)
 
             content.append(
                 ui.ActionRow(
@@ -126,9 +129,6 @@ class PlayerInfoView(BaseInfoView):
 
         await self.refresh_content(interaction)
 
-    async def _on_new_character_button(self, interaction: discord.Interaction):
-        await self.defer_to(NewCharacterView, interaction)
-
 class CharacterInfoView(BaseInfoView):
     def __init__(self, bot: StewardBot, ctx: StewardContext, player: Player, character: Character, **kwargs):
         self.owner = ctx.author
@@ -141,7 +141,7 @@ class CharacterInfoView(BaseInfoView):
         self.delete_on_timeout = kwargs.get("delete", False)
         
         content = self._build_content()
-        super().__init__(*content)
+        super().__init__(*content, **kwargs)
     
     def _build_content(self) -> list:
         """Build and return the view content."""
@@ -150,7 +150,16 @@ class CharacterInfoView(BaseInfoView):
         
         # Header section
         container = ui.Container(
-            get_character_header(self.player, self.character),
+            ui.Section(
+                ui.TextDisplay(
+                    f"{self.character.name} ({self.player.mention})\n"
+                    f"-# Level {self.character.level}\n"
+                    f"-# {self.character.species_str} {self.character.class_str}"
+                ),
+                accessory=ui.Thumbnail(
+                    url=self.character.avatar_url or self.player.avatar.url
+                ),
+            ),
             separator
         )
 
@@ -175,6 +184,7 @@ class CharacterInfoView(BaseInfoView):
         return content
     
     def _add_nickname_section(self, container: ui.Container):
+        """Add nickname display with optional edit button."""
         nickname_display = ui.TextDisplay(f"**Nickname**: {self.character.nickname or '`None`'}")
         
         if self.character.player_id == self.ctx.author.id:
@@ -189,6 +199,7 @@ class CharacterInfoView(BaseInfoView):
             container.add_item(nickname_display)
     
     def _add_currency_section(self, container: ui.Container):
+        """Add currency display with optional edit button."""
         currency_display = ui.TextDisplay(
             f"**{self.ctx.server.currency_str}**: {self.character.currency}\n"
         )
@@ -205,6 +216,7 @@ class CharacterInfoView(BaseInfoView):
             container.add_item(currency_display)
     
     def _add_xp_section(self, container: ui.Container):
+        """Add XP display with optional level up button."""
         xp_level = self.ctx.server.get_level_for_xp(self.character.xp)
         xp_display = ui.TextDisplay(
             f"**XP**: {self.character.xp} (Level {xp_level}{' eligible' if xp_level > self.character.level else ''})"
@@ -222,9 +234,10 @@ class CharacterInfoView(BaseInfoView):
             container.add_item(xp_display)
     
     def _add_activity_section(self, container: ui.Container):
+        """Add activity points display if enabled."""
         if self.ctx.server.activity_points:
             activity_point = self.ctx.server.get_activitypoint_for_points(self.character.activity_points)
-            activity_level = 'Level 0' if not activity_point else f'Level {activity_point.level}'
+            activity_level = 'Level 0' if not activity_point else f'Level {activity_point.level})'
             activity_display = ui.TextDisplay(    
                 f"**Activity Points**: {self.character.activity_points} ({activity_level})"
             )
@@ -252,14 +265,6 @@ class CharacterInfoView(BaseInfoView):
             avatar_button.callback = self._on_edit_character_avatar
             buttons.append(avatar_button)
 
-            activity_button = ui.Button(
-                label="Character Activity Settings",
-                style=discord.ButtonStyle.blurple,
-                custom_id="activity_char"
-            )
-            activity_button.callback = self._on_character_activity
-            buttons.append(activity_button)
-
         if self.staff:
             level_up_button = ui.Button(
                 label="Level up!",
@@ -278,21 +283,14 @@ class CharacterInfoView(BaseInfoView):
             inactivate_button.callback = self._on_character_inactivate
             buttons.append(inactivate_button)
 
-        exit_button = ui.Button(
-                label="Quit",
-                style=discord.ButtonStyle.red
-            )
-        exit_button.callback = self.timeout_callback
-        buttons.append(exit_button)
-
         return buttons
     
     async def _on_char_select(self, interaction: discord.Interaction):
         char = self.get_item("char_select").values[0]
 
         if char == "def":
-            return await self.defer_to(PlayerInfoView, interaction)
-            
+            await self.defer_to(PlayerInfoView, interaction)
+            return
 
         character = next(
             (c for c in self.player.active_characters if str(c.id) == char),
@@ -303,7 +301,7 @@ class CharacterInfoView(BaseInfoView):
         await self.defer_to(CharacterInfoView, interaction)
 
     async def _on_edit_character_nickname(self, interaction: discord.Interaction):
-        old_nick = self.character.nickname if self.character.nickname and self.character.nickname != '' else ' '
+        old_nick = self.character.nickname
         new_nick = await get_value_modal(
             interaction,
             "Nickname",
@@ -343,9 +341,6 @@ class CharacterInfoView(BaseInfoView):
             await self.character.upsert()
 
         await self.refresh_content(interaction)
-
-    async def _on_character_activity(self, interaction: discord.Interaction):
-        await self.defer_to(CharacterActivityView, interaction)
 
     async def _on_edit_character_currency(self, interaction: discord.Interaction):
         old_currency = self.character.currency
@@ -484,12 +479,12 @@ class CharacterInfoView(BaseInfoView):
             # Refresh player
             self.player = await Player.get_or_create(self.bot.db, self.player)
 
-        await self.defer_to(PlayerInfoView, interaction)
+        await self.refresh_content(interaction)
         
 class NewCharacterView(BaseInfoView):
     new_character: Character = None
+    reroll_character: Character = None
     application_type: ApplicationType
-    reroll_character: Character
 
     def __init__(self, bot: StewardBot, ctx: StewardContext, player: Player, **kwargs):
         self.owner = ctx.author
@@ -499,308 +494,52 @@ class NewCharacterView(BaseInfoView):
         self.staff = kwargs.get("staff", False)
         self.admin = kwargs.get("admin", False)
         self.delete_on_timeout = kwargs.get("delete", False)
-        self.application_type = kwargs.get("application_type")
-        self.new_character = kwargs.get(
-            "new_character", 
-            Character(
-                self.bot.db, 
-                player_id=self.player.id, 
-                guild_id=self.player.guild.id,
-                primary_character=True if not self.player.active_characters else False
-            )
+        self.new_character = Character(
+            self.bot.db, 
+            player_id=self.player.id, 
+            guild_id=self.player.guild.id,
+            primary_character=True if not self.player.active_characters else False
         )
         self.reroll_character = kwargs.get("reroll_character")
+        self.application_type = kwargs.get("application_type")
 
         content = []
         separator = ui.Separator()
 
         container = ui.Container(
-            get_player_header(self.player),
+            ui.Section(
+                ui.TextDisplay(f"{self.player.mention}"),
+                accessory=ui.Thumbnail(
+                    url=f"{self.player.avatar.url}"
+                )
+            ),
             separator,
             ui.TextDisplay(
                 f"**Name**: {self.new_character.name or '`None`'}\n"
                 f"**Level**: {self.new_character.level}\n"
                 f"**Species**: {self.new_character.species_str or '`None`'}\n"
                 f"**Class**: {self.new_character.class_str or '`None`'}\n"
-                f"**{self.ctx.server.currency_str}**: {self.new_character.currency:,.2f}"
+                f"**{self.ctx.server.currency_str}**: {self.new_character.currency:,2f}"
             )
         )
 
         content.append(container)
-        content.append(ui.ActionRow(
-            self._add_button_row_1()
-        ))
 
-        if self.application_type and self.application_type != ApplicationType.new:
-            content.append(ui.ActionRow(
-                self._add_button_row_2()
-            ))
-
-        
-        content.append(
-            ui.ActionRow(
-                *self._add_button_row_3()
-            )
-        )
-
-        super().__init__(*content)
-    
-    def _add_button_row_1(self):
-        options = []
-
+        # Application Type
         for type in ApplicationType:
-            match type:
-                case ApplicationType.new:
-                    if len(self.player.active_characters) == 0 or len(self.player.active_characters) < self.ctx.server.max_characters(self.player):
-                        options.append(
-                            discord.SelectOption(
-                                label=type.value,
-                                value=type.name,
-                                default=True if not self.player.active_characters or self.application_type and self.application_type == type else False
-                            )
-                        )
-                case ApplicationType.level:
-                    pass
-
-                case _:
-                    options.append(
-                        discord.SelectOption(
-                            label=type.value,
-                            value=type.name,
-                            default=True if self.application_type and self.application_type == type else False
-                        )
-                    )
-        reroll_select = ui.Select(
-            placeholder="Character Creation Type",
-            custom_id="application_type",
-            options=options
-        )
-        reroll_select.callback = self._on_application_type_select
-
-        return reroll_select
-    
-    def _add_button_row_2(self):
-        character_select = get_character_select_option(self.player, self.reroll_character, self._on_reroll_character_select, default="Select a character to reroll")
-        return character_select
-
-    def _add_button_row_3(self):
-        buttons = []
-
-        enabled = (
-            self.new_character 
-            and self.new_character.name != "" 
-            and self.new_character.species_str != ""
-            and self.new_character.class_str != ""
-            and (
-                self.application_type
+            if (
+                type == ApplicationType.new
                 and (
-                    self.application_type == ApplicationType.new
-                    or self.reroll_character
+                    not self.player.active_characters
+                    or len(self.player.active_characters) < self.ctx.server.max_characters(self.player)
                 )
-            )
-        )
+            ):
+                pass
 
-        # Create Character
-        create_button = ui.Button(
-            label="Create Character",
-            style=discord.ButtonStyle.green,
-            disabled=True if not enabled else False,
-        )
-        create_button.callback = self._on_create_button
-        buttons.append(create_button)
 
-        # Character Information
-        info_button = ui.Button(
-            label="Character Information",
-            style=discord.ButtonStyle.blurple
-        )
-        info_button.callback = self._on_info_button
-        buttons.append(info_button)
+        #
 
-        # Cancel
-        cancel_button = ui.Button(
-            label="Cancel",
-            style=discord.ButtonStyle.red
-        )
-        cancel_button.callback = self._on_cancel_button
-
-        buttons.append(cancel_button)
-
-        return buttons
-
-    async def _on_reroll_character_select(self, interaction: discord.Interaction):
-        char = self.get_item("char_select").values[0]
-
-        if char == "def":
-            self.reroll_character = None
-        else:
-            character = next(
-                (c for c in self.player.active_characters if str(c.id) == char),
-                None
-            )
-            self.reroll_character = character
-
-        await self.refresh_content(interaction)
-
-    async def _on_application_type_select(self, interaction: discord.Interaction):
-        type = self.get_item("application_type").values[0]
-        self.reroll_character = None
-        self.application_type = ApplicationType.from_string(type)
-
-        await self.refresh_content(interaction)
-
-    async def _on_cancel_button(self, interaction: discord.Interaction):
+    async def _on_cancel(self, interaction: discord.Interaction):
         await self.defer_to(PlayerInfoView, interaction)
-
-    async def _on_info_button(self, interaction: discord.Interaction):
-        modal = NewCharacterModal(self.new_character, self.ctx.server)
-        await self.prompt_modal(modal, interaction)
-
-        await self.refresh_content(interaction)
-
-    async def _on_create_button(self, interaction: discord.Interaction):
-        if self.application_type != ApplicationType.new:
-            self.reroll_character.active = False
-            await StewardLog.create(
-                self.ctx.bot,
-                self.ctx.author,
-                self.player,
-                LogEvent.edit_character,
-                character=self.reroll_character,
-                notes=f"str(self.application_type.value) -> Inactivating Character"
-            )
-
-        new_log = await StewardLog.create(
-            self.ctx.bot,
-            self.ctx.author,
-            self.player,
-            LogEvent.new_character,
-            character=self.new_character,
-            notes=f"New character!{f' Rerolled from {self.reroll_character.name} [{self.reroll_character.id}]' if self.reroll_character else ''}"
-        )
-
-        self.player = await Player.get_or_create(self.bot.db, self.player)
-        self.bot.dispatch(RuleTrigger.new_character.name, interaction, self.new_character, new_log)
-
-        await self.defer_to(PlayerInfoView, interaction)
-
-class CharacterActivityView(BaseInfoView):
-    def __init__(self, bot: StewardBot, ctx: StewardContext, player: Player, character: Character, **kwargs):
-        self.owner = ctx.author
-        self.bot = bot
-        self.ctx = ctx
-        self.player = player
-        self.character = character
-        self.staff = kwargs.get("staff", False)
-        self.admin = kwargs.get("admin", False)
-        self.delete_on_timeout = kwargs.get("delete", False)
         
-        content = self._build_content()
-        super().__init__(*content)
-        
-    def _build_content(self) -> list:
-        content = []
-        separator = ui.Separator()
-
-        container = ui.Container(
-            get_character_header(self.player, self.character),
-            separator
-        )
-
-        self._add_channel_section(container) 
-
-        content.append(container)
-
-        character_select = get_character_select_option(self.player, self.character, self._on_char_select)
-        content.append(ui.ActionRow(character_select))
-        
-        self._add_action_row_2(content)
-
-        return content
-
-    def _add_channel_section(self, container):
-        channels = [
-            self.ctx.server.get_channel_or_thread(c).mention
-            for c in self.character.channels
-            if self.ctx.server.get_channel_or_thread(c)
-        ]
-
-        text = "\n".join(channels)
-        chunks = chunk_text(text)
-
-        for chunk in chunks:
-            container.add_item(
-                ui.TextDisplay(
-                    f"**Channel Defaults**:\n"
-                    f"{chunk}"
-                )
-            )
-
-    def _add_action_row_2(self, content):
-        buttons = []
-        if self.ctx.author.id == self.player.id:
-            clear_channel_button = ui.Button(
-                label="Clear channel overrides",
-                style=discord.ButtonStyle.red,
-            )
-            clear_channel_button.callback = self._on_clear_channel
-            buttons.append(clear_channel_button)
-
-            primary_char = ui.Button(
-                label="Set primary character",
-                style=discord.ButtonStyle.green,
-                disabled=True if self.character.primary_character else False
-            )
-            primary_char.callback = self._on_primary_character
-            buttons.append(primary_char)
-
-        back_button = ui.Button(
-            label="Back"
-        )
-        back_button.callback = self._on_back
-
-        content.append(
-            ui.ActionRow(
-                *buttons
-            )
-        )
-
-    async def _on_clear_channel(self, interaction: discord.Interaction):
-        if await confirm_modal(
-            self.ctx,
-            f"Are you sure you want to clear all {len(self.character.channels)} channel overrides for this character?"
-        ):
-            self.character.channels = []
-            await self.character.upsert()
-
-        await self.refresh_content(interaction)
-
-    async def _on_primary_character(self, interaction: discord.Interaction):
-        for char in self.player.active_characters:
-            if char.primary_character == True:
-                char.primary_character = False
-                await char.upsert()
-
-        self.character.primary_character = True
-        await self.character.upsert()
-
-        await self.refresh_content(interaction)
-
-    async def _on_char_select(self, interaction: discord.Interaction):
-        char = self.get_item("char_select").values[0]
-
-        if char == "def":
-            await self.defer_to(PlayerInfoView, interaction)
-            return
-
-        character = next(
-            (c for c in self.player.active_characters if str(c.id) == char),
-            None
-        )
-        self.character = character
-        
-        await self.defer_to(CharacterActivityView, interaction)
-
-    async def _on_back(self, interaction: discord.Interaction):
-        await self.defer_to(CharacterInfoView, interaction)
-        
+    

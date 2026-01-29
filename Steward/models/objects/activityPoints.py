@@ -21,7 +21,7 @@ class ActivityPoints:
     activity_points_table = sa.Table(
         "activity_points",
         metadata,
-        sa.Column("guild_id", sa.BigInteger, nullable=False),
+        sa.Column("guild_id", sa.BigInteger, sa.ForeignKey("servers.id"), nullable=False),
         sa.Column("level", sa.Integer, nullable=False),
         sa.Column("points", sa.Integer, nullable=False),
         sa.Column("xp_expr", sa.String(500), nullable=False, default="0"),

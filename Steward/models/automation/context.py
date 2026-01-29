@@ -7,8 +7,19 @@ if TYPE_CHECKING:
     from Steward.models.objects.player import Player
     from Steward.models.objects.servers import Server
     from Steward.models.objects.npc import NPC
+    from Steward.models.objects.log import StewardLog
+    from Steward.models.objects.rules import StewardRule
+    from Steward.models.objects.request import Request
 
 class AutomationContext:
+    character: "Character" = None
+    player: "Player" = None
+    log: "StewardLog" = None
+    rule: "StewardRule" = None
+    ctx = None
+    server: "Server" = None
+    npc: "NPC" = None
+    request: "Request" = None
 
     def __init__(self,
                  ctx: Union["StewardContext", discord.Interaction] = None,
@@ -16,6 +27,8 @@ class AutomationContext:
                  player: Optional["Player"] = None,
                  server: Optional["Server"] = None,
                  npc: Optional["NPC"] = None,
+                 log: Optional["StewardLog"] = None,
+                 request: Optional["Request"] = None,
                  **kwargs
                  ):
             
@@ -24,15 +37,9 @@ class AutomationContext:
         self.player = player
         self.server = server
         self.npc = npc
+        self.log=log
+        self.request = request
         
         # Any extras
         for key, value in kwargs.items():
             setattr(self, key, value)
-    
-    def to_dict(self) -> dict:
-        result = {}
-        for key, value in self.__dict__.items():
-            if not key.startswith('_') and value is not None:
-                result[key] = value
-        return result
-        

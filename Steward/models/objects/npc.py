@@ -30,7 +30,7 @@ class NPC:
     npc_table = sa.Table(
         "ref_npcs",
         metadata,
-        sa.Column("guild_id", sa.BigInteger, nullable=False),
+        sa.Column("guild_id", sa.BigInteger, sa.ForeignKey("servers.id") ,nullable=False),
         sa.Column("key", sa.String, nullable=False),
         sa.Column("name", sa.String, nullable=False),
         sa.Column("avatar_url", sa.String, nullable=True),

@@ -29,21 +29,23 @@ class Player(discord.Member):
         self.statistics: dict[str, int]  = kwargs.get("statistics", {})
         self.campaign = kwargs.get("campaign")
         self.notes = kwargs.get("notes")
+        self.staff_points = kwargs.get("staff_points", 0)
 
         # Calculated Attributes
         self.characters: list["Character"] = []
 
     def __repr__(self):
-        return f"<{self.__class__.__name__} id={self.id} guild={self.guild.id} name={self.display_name:!r}>"
+        return f"<{self.__class__.__name__} id={self.id} guild={self.guild.id} name={self.display_name!r}>"
 
     player_table = sa.Table(
         "players",
         metadata,
         sa.Column("id", sa.BigInteger, primary_key=True),
-        sa.Column("guild_id", sa.BigInteger, primary_key=True),
+        sa.Column("guild_id", sa.BigInteger, sa.ForeignKey("servers.id") ,primary_key=True),
         sa.Column("statistics", sa.JSON, nullable=False),
         sa.Column("campaign", sa.String, nullable=True),
-        sa.Column("notes", sa.String, nullable=True)
+        sa.Column("notes", sa.String, nullable=True),
+        sa.Column("staff_points", sa.Integer, nullable=False, default=0)
     )
 
     class PlayerSchema(Schema):
@@ -52,6 +54,7 @@ class Player(discord.Member):
         statistics = fields.Dict(required=False, load_default=dict)
         campaign = fields.String(allow_none=True)
         notes = fields.String(allow_none=True)
+        staff_points = fields.Integer(allow_none=False, load_default=0)
 
         @post_load
         def make_player(self, data, **kwargs) -> dict:
@@ -77,6 +80,17 @@ class Player(discord.Member):
     @property
     def active_characters(self) -> list["Character"]:
         return [c for c in self.characters if c.active]
+    
+    @property
+    def highest_level_character(self) -> "Character":
+        character = None
+        for char in self.active_characters:
+            if character is None:
+                character = char
+            elif character and char.level > character.level:
+                character = char
+
+        return character
     
     @property
     def discord_url(self) -> str:
@@ -168,7 +182,8 @@ class Player(discord.Member):
                 {
                     "statistics": self.statistics,
                     "campaign": getattr(self, "campaign"),
-                    "notes": getattr(self, "notes")
+                    "notes": getattr(self, "notes"),
+                    "staff_points": getattr(self, "staff_points")
                 }                                
             )
             .returning(self.player_table)

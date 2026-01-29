@@ -34,3 +34,15 @@ class LogEvent(StewardEnum):
     activity = "Activity"
     reward = "Reward"
     null_log = "Null Log"
+    automation = "Automated Reward (Rules)"
+
+
+class RuleTrigger(StewardEnum):
+    member_join =  "Member Join"
+    member_leave = "Member Leave"
+    level_up = "Character Level Up"
+    new_character = "New Character"
+    log = "Log Created"
+    scheduled = "Scheduled"
+    staff_point = "Staff Point"
+    new_request = "New Request"

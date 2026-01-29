@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
 from timeit import default_timer as timer
 
 from Steward.models import metadata
+
 from Steward.models.embeds import ErrorEmbed
 from Steward.models.objects.exceptions import StewardCommandError, StewardError
 from Steward.utils.discordUtils import try_delete
@@ -21,7 +22,8 @@ from Steward.models.objects.levels import Levels
 from Steward.models.objects.servers import Server
 from Steward.models.objects.player import Player
 from Steward.models.objects.activity import Activity
-
+from Steward.models.objects.rules import StewardRule
+from Steward.models.objects.request import Request
 
 log = logging.getLogger(__name__)
 

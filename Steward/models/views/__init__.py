@@ -25,6 +25,9 @@ class StewardView(ui.DesignerView):
         else:
             await interaction.channel.send(embed=ErrorEmbed(error))
 
+    async def timeout_callback(self, _: discord.Interaction):
+        await self.on_timeout()
+
     async def on_timeout(self):
         if (
             not self._message
@@ -88,38 +91,46 @@ class StewardView(ui.DesignerView):
     
     def _has_button_accessory(self, section: ui.Section) -> bool:
         return hasattr(section, 'accessory') and isinstance(section.accessory, ui.Button)
-    
-    def _process_sections_in_parent(self, parent, parent_items):
-        replacements = []
-        for item in parent_items:
-            if isinstance(item, ui.Section) and self._has_button_accessory(item):
-                text_display = self._extract_text_from_section(item)
-                if text_display:
-                    replacements.append((parent, item, text_display))
-        return replacements
 
     def remove_all_buttons_and_action_rows(self):
-        action_rows_to_remove = []
-        replacements = []
+        """Remove all buttons and action rows, keeping only text displays"""
+        # Build list of items to keep without modifying structure
+        items_to_keep = []
         
-        # Process view children
-        for child in self.children:
-            if isinstance(child, ui.ActionRow):
-                action_rows_to_remove.append(child)
-            elif isinstance(child, ui.Section):
-                replacements.extend(self._process_sections_in_parent(self, [child]))
+        for child in list(self.children):
+            if child is None or isinstance(child, (ui.ActionRow, ui.Button)):
+                continue
+            elif isinstance(child, ui.Section) and self._has_button_accessory(child):
+                # Extract text display from section with button
+                text_display = self._extract_text_from_section(child)
+                if text_display:
+                    items_to_keep.append(text_display)
             elif isinstance(child, ui.Container):
-                replacements.extend(self._process_sections_in_parent(child, child.items))
+                # Build filtered container
+                new_container = ui.Container()
+                for item in list(child.items):
+                    if item is None or isinstance(item, (ui.Button, ui.ActionRow)):
+                        continue
+                    elif isinstance(item, ui.Section) and self._has_button_accessory(item):
+                        text_display = self._extract_text_from_section(item)
+                        if text_display:
+                            new_container.add_item(text_display)
+                    else:
+                        new_container.add_item(item)
+                
+                if len(new_container.items) > 0:
+                    items_to_keep.append(new_container)
+            else:
+                # Keep other items as-is
+                items_to_keep.append(child)
         
-        # Remove action rows from view
-        for action_row in action_rows_to_remove:
-            self.remove_item(action_row)
+        # Clear all children from self
+        self.clear_items()
         
-        # Apply all section replacements
-        for parent, section, text_display in replacements:
-            if parent is not None and section.parent is not None:
-                parent.remove_item(section)
-                parent.add_item(text_display)
+        # Add the filtered items back
+        for item in items_to_keep:
+            if item is not None:
+                self.add_item(item)
 
     async def refresh_content(self, interaction: discord.Interaction):
         view = self.from_menu(self)

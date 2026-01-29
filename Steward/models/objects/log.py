@@ -6,10 +6,11 @@ import discord
 from typing import TYPE_CHECKING, Union
 from marshmallow import Schema, fields, post_load
 from datetime import datetime, timezone
+
+from Steward.models.automation.utils import eval_numeric
 from ..automation.context import AutomationContext
-from Steward.models.automation.evaluators import evaluate_expression
 from Steward.models.objects.activity import Activity
-from Steward.models.objects.enum import LogEvent
+from Steward.models.objects.enum import LogEvent, RuleTrigger
 from Steward.models import metadata
 from Steward.models.objects.exceptions import StewardError, TransactionError
 from Steward.utils.dbUtils import execute_query
@@ -90,10 +91,10 @@ class StewardLog:
         sa.Column("id", sa.UUID, primary_key=True, default=uuid.uuid4),
         sa.Column("author_id", sa.BigInteger, nullable=False),
         sa.Column("player_id", sa.BigInteger, nullable=False),
-        sa.Column("guild_id", sa.BigInteger, nullable=False),
+        sa.Column("guild_id", sa.BigInteger, sa.ForeignKey("servers.id"), nullable=False),
         sa.Column("event", sa.String, nullable=False),
-        sa.Column("character_id", sa.UUID, nullable=True),
-        sa.Column("activity_id", sa.UUID, nullable=True),
+        sa.Column("character_id", sa.UUID, sa.ForeignKey("characters.id"), nullable=True),
+        sa.Column("activity_id", sa.UUID, sa.ForeignKey("activities.id"), nullable=True),
         sa.Column("currency", sa.DECIMAL, nullable=False),
         sa.Column("xp", sa.DECIMAL, nullable=False),
         sa.Column("notes", sa.String, nullable=True),
@@ -128,7 +129,7 @@ class StewardLog:
     async def upsert(self) -> "StewardLog":
         update_dict = {
             "event": self.event.name,
-            "activity_id": self.activity.id if hasattr(self, "activity") and self.activity else None,
+            "activity_id": self.activity.id if hasattr(self, "activity") and self.activity else self.activity_id if hasattr(self, "activity_id") and self.activity_id else None,
             "notes": getattr(self, "notes", None),
             "currency": self.currency,
             "xp": self.xp,
@@ -205,6 +206,7 @@ class StewardLog:
         log.player = await Player.get_or_create(bot.db, log.server.get_member(log.player_id))
         log.author = await Player.get_or_create(bot.db, log.server.get_member(log.author_id))
         log.character = await Character.fetch(bot.db, log.character_id)
+        log.activity = await Activity.fetch(bot.db, log.activity_id)
         
         return log
     
@@ -222,7 +224,7 @@ class StewardLog:
             **kwargs: Additional keyword arguments:
                 character_id (int, optional): The ID of the character to fetch.
                 character (Character, optional): The character object directly.
-                activity (Union[str, uuid.UUID, Activity], optional): The activity associated with this log.
+                activity (Union[str, Activity], optional): The activity associated with this log.
                 notes (str, optional): Additional notes for the log entry.
                 currency (Union[int, str], optional): Currency change amount or expression.
                 xp (Union[int, str], optional): XP change amount or expression.
@@ -249,22 +251,25 @@ class StewardLog:
         server = await Server.get_or_create(bot.db, bot.get_guild(player.guild.id))
         context = AutomationContext(player=player, server=server, character=character)
 
-        activity: "Activity" = kwargs.get("activity")
-        if isinstance(activity, str):
-            activity = uuid.UUID(activity)
-        if isinstance(activity, uuid.UUID):
-            pass
-            # Activity Fetching
+        act: "Activity" = kwargs.get("activity")
+        activity = None
+        if isinstance(act, str):
+            activity = server.get_activity(act)
+
+            if activity is None:
+                raise StewardError(f"Activity `{act}` not found.")
+        elif isinstance(act, Activity):
+            activity = act
 
         notes = kwargs.get("notes")
 
         currency = kwargs.get("currency", activity.currency_expr if activity else 0)
         if isinstance(currency, str):
-            currency = evaluate_expression(currency, context)
+            currency = eval_numeric(currency, context)
 
         xp = kwargs.get("xp", activity.xp_expr if activity else 0)
         if isinstance(xp, str):
-            xp = evaluate_expression(xp, context)
+            xp = eval_numeric(xp, context)
 
         # Validations
         if activity and activity.limited:
@@ -272,10 +277,14 @@ class StewardLog:
             xp_limit = server.xp_limit(player, character)
 
             if xp_limit:
-                xp = min(xp, xp_limit)
+                xp = min(xp, xp_limit-character.limited_xp)
 
             if currency_limit:
-                currency = min(currency, currency_limit)
+                currency = min(currency, currency_limit-character.limited_currency)
+
+        # Type Conversions
+        currency = Decimal(currency)
+        xp = int(xp)
 
         if (xp > 0 or currency > 0) and not character:
             raise StewardError(
@@ -297,7 +306,12 @@ class StewardLog:
             character.currency += currency
             
             if server.xp_global_limit_expr and server.xp_global_limit_expr != "":
-                character.xp += min(xp,server.xp_global_limit()) 
+                character.xp += min(xp,server.xp_global_limit(player, character))
+
+            if activity and activity.limited:
+                character.limited_currency += currency
+                character.limited_xp += xp
+
 
         log_entry = StewardLog(
             bot,
@@ -305,6 +319,7 @@ class StewardLog:
             player=player,
             server=server,
             event=event,
+            activity_id=activity.id if activity else  None,
             character=character if character else None,
             notes=notes,
             currency=currency,
@@ -315,6 +330,7 @@ class StewardLog:
             await character.upsert()
 
         log_entry = await log_entry.upsert()
+        bot.dispatch(RuleTrigger.log.name, log_entry)
 
         return log_entry      
 

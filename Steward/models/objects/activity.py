@@ -1,3 +1,4 @@
+from typing import Union
 import uuid
 import sqlalchemy as sa
 
@@ -25,22 +26,24 @@ class Activity:
     activity_table = sa.Table(
         "activities",
         metadata,
-        sa.Column("guild_id", sa.BigInteger, nullable=False),
+        sa.Column("id", sa.UUID, primary_key=True, default=uuid.uuid4),
         sa.Column("name", sa.String, nullable=False),
+        sa.Column("guild_id", sa.BigInteger, sa.ForeignKey("servers.id"), nullable=False),
         sa.Column("currency_expr", sa.String(500), nullable=True),
         sa.Column("xp_expr", sa.String(500), nullable=True),
         sa.Column("limited", sa.BOOLEAN, nullable=False, default=False),
         sa.Column("active", sa.Boolean, nullable=False, default=True),
-        sa.PrimaryKeyConstraint("guild_id", "name")
+        sa.Index("idx_activity", "guild_id", "name")
     )
 
     class ActivitySchema(Schema):
         db: AsyncEngine
 
+        id = fields.UUID(required=True)
         guild_id = fields.Integer(required=True)
         name = fields.String(required=True)
-        currency_expr = fields.String(required=True)
-        xp_expr = fields.String(required=True)
+        currency_expr = fields.String(required=False, allow_none=True)
+        xp_expr = fields.String(required=False, allow_none=True)
         limited = fields.Boolean(required=True)
         active = fields.Boolean(required=True)
 
@@ -52,19 +55,6 @@ class Activity:
             activity = Activity(self.db, **data)
 
             return activity
-        
-    async def delete(self) -> None:
-        query = (
-            Activity.activity_table.delete()           
-            .where(
-                sa.and_(
-                    Activity.activity_table.c.name == self.name,
-                    Activity.activity_table.c.guild_id == self.guild_id
-                )
-            )
-        )
-
-        await execute_query(self._db, query)
 
     async def upsert(self) -> "Activity":
         update_dict = {
@@ -80,16 +70,44 @@ class Activity:
             **update_dict
         }
 
-        query = (
-            insert(Activity.activity_table)
-            .values(**insert_dict)
-            .returning(Activity.activity_table)
-            .on_conflict_do_update(
-                index_elements=["guild_id", "name"],
-                set_=update_dict
+        if hasattr(self, "id") and self.id is not None:
+            query = (
+                Activity.activity_table.update()
+                .where(Activity.activity_table.c.id == self.id)
+                .values(**update_dict)
+                .returning(Activity.activity_table)
             )
-        )
+        else:
+            query = (
+                Activity.activity_table.insert()
+                .values(**insert_dict)
+                .returning(Activity.activity_table)
+            )
 
         row = await execute_query(self._db, query)
 
         return Activity.ActivitySchema(self._db).load(dict(row._mapping))
+    
+    @staticmethod
+    async def fetch(db: AsyncEngine, activity_id: Union[uuid.UUID, str], active_only: bool = True) -> "Activity":
+        if isinstance(activity_id, str):
+            activity_id = uuid.UUID(activity_id)
+
+        query = (
+            Activity.activity_table.select()
+            .where(Activity.activity_table.c.id == activity_id)
+        )
+
+        if active_only:
+            query.where(
+                Activity.activity_table.c.active == True
+            )
+
+        row = await execute_query(db, query)
+
+        if not row:
+            return None
+        
+        activity = Activity.ActivitySchema(db).load(dict(row._mapping))
+
+        return activity
