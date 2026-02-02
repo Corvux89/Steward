@@ -2,5 +2,6 @@
 ,"Staff Reward","staff_point",,True,"player.staff_points >= 5",0,"[{""xp"": ""server.currency_limit(player, character)*0.4"", ""type"": ""reward"", ""notes"": ""Good staff. Have a pizza party!"", ""currency"": ""server.currency_limit(player, character)*0.4""}, {""type"": ""staff_points"", ""value"": ""-5""}]"
 ,"Staff Point","log",,True,"log.activity.name != """"",1,"{""type"": ""staff_points"", ""value"": 1}"
 ,"Log Display","log",,True,,0,"{""type"": ""message"", ""embed"": {""title"": ""Log Entry - {log.id}"", ""footer"": ""Rule: {rule.name} [{rule.id}]"", ""description"": ""**Player**: {player.mention}\n**Author**: {log.author.mention}\n**Activity**: {log.activity.name if log.activity else 'None'}\n**Character**: {character.name if character else 'None'}\n**{server.currency_label}**: {log.currency}\n**XP**: {log.xp}\n\n**Notes**:\n {log.notes}""}, ""channel_id"": 1465371354340524205}"
-,"Hourly Reset","scheduled","@hourly",True,,0,"[{""type"":""message"",""content"":""Hourly Reset done"",""channel_id"":1465488482708361236},{""type"":""reset_limited""}]"
+,"Hourly Reset","scheduled","@hourly",True,,0,"[{""type"":""reset_limited""}]"
 ,Staff Request,new_request,,True,,0,"{""type"":""post_request"",""channel_id"":""1196483222947762207"",""button_1"":""Approve""}"
+,Applications,new_application,,True,,0,"{""type"":""post_application"",""channel_id"":""1465488482708361236""}"

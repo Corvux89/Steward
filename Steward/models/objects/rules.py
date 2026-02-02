@@ -13,8 +13,9 @@ from Steward.models.automation.context import AutomationContext
 from Steward.models.automation.evaluators import evaluate_expression
 from Steward.models.automation.utils import eval_bool, eval_int
 from Steward.models.objects.enum import QueryResultType, RuleTrigger
-from Steward.models.views.request import BastRequestReviewView
+from Steward.models.views.request import BaseRequestReviewView
 from Steward.utils.dbUtils import execute_query
+from Steward.utils.discordUtils import chunk_text, get_webhook
 
 if TYPE_CHECKING:
     from ...bot import StewardBot
@@ -349,7 +350,8 @@ class StewardRule:
                     continue
                     
                 action_type = action.get('type')
-  
+
+                # TODO: Assign Role, Remove Role, post application, 
                 match action_type:
                     case'reward':
                         await self._reward(action, bot, context, results)
@@ -364,7 +366,10 @@ class StewardRule:
                         await self._staff_points(action, bot, context, results)
 
                     case "post_request":
-                        await self._post_request(action, bot, context, results)                      
+                        await self._post_request(action, bot, context, results)  
+
+                    case "post_application":
+                        await self._post_application(action, bot, context, results)
 
                         
             return {"success": True, "results": results}
@@ -628,7 +633,7 @@ class StewardRule:
         if self.trigger != RuleTrigger.new_request:
             results.append({'type': self.trigger.name, 'success': False, 'error': f'Improper trigger'})
         elif not hasattr(context, "request"):
-            results.append({'type': self.trigger.name, 'success': False, 'error': f'No request not found'})
+            results.append({'type': self.trigger.name, 'success': False, 'error': f'Request not found'})
 
         channel_id = action.get('channel_id')
 
@@ -645,7 +650,7 @@ class StewardRule:
             results.append({'type': self.trigger.name, 'success': False, 'error': f'No channel available'})
             return
         try:
-            view = BastRequestReviewView(bot, request=context.request)
+            view = BaseRequestReviewView(bot, request=context.request)
             await view.build_content()
 
             message = await channel.send(view=view)
@@ -655,6 +660,58 @@ class StewardRule:
         except Exception as e:
             await context.request.delete()
         
+    async def _post_application(self, action: dict, bot: "StewardBot", context: "AutomationContext", results: []):
+        from Steward.models.objects.application import Application
+
+        if self.trigger != RuleTrigger.new_application:
+            results.append({'type': self.trigger.name, 'success': False, 'error': f'Improper trigger'})
+        elif not hasattr(context, "application"):
+            results.append({'type': self.trigger.name, 'success': False, 'error': f'Application not found'})
+
+        channel_id = action.get('channel_id')
+
+        if channel_id:
+            channel = bot.get_channel(int(channel_id))
+            if not channel:
+                await context.request.delete()
+                results.append({'type': self.trigger.name, 'success': False, 'error': f'Channel {channel_id} not found'})
+                return
+        elif context.ctx and hasattr(context.ctx, "channel"):
+            channel = context.ctx.channel
+        else:
+            await context.request.delete()
+            results.append({'type': self.trigger.name, 'success': False, 'error': f'No channel available'})
+            return
+        
+        application: Application = context.application
+
+        webhook = await get_webhook(channel)
+
+        chunks = chunk_text(application.output)
+
+        for i, chunk in enumerate(chunks):
+            if i == 0:
+                message = await webhook.send(
+                    username=application.player.display_name if application.template.character_specific == False else application.character.name,
+                    avatar_url=(
+                        application.player.avatar.url if application.player.avatar else None if application.template.character_specific == False else application.character.avatar_url
+                    ),
+                    content=chunk,
+                    wait=True
+                )
+
+                thread = await message.create_thread(
+                    name=f"{application.player.display_name if application.template.character_specific == False else application.character.name}",
+                    auto_archive_duration=10080
+                )
+            else:
+                await thread.send(chunk)
+
+        await thread.send(
+            f"Need to make an edit? Use `/edit_application` in this thread."
+        )
+
+        results.append({'type': self.trigger.name, 'success': True})    
 
         
     

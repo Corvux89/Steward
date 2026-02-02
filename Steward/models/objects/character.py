@@ -17,14 +17,6 @@ if TYPE_CHECKING:
     
 
 class Character:
-    @classmethod
-    def new(cls, db: AsyncEngine, player: "Player"):
-        char = cls(db=db)
-        char.player_id = player.id
-        char.guild_id = player.guild.id
-
-        return char
-
     def __init__(self, db: AsyncEngine, **kwargs):
         self._db = db
 

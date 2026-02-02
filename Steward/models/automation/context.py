@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from Steward.models.objects.npc import NPC
     from Steward.models.objects.log import StewardLog
     from Steward.models.objects.rules import StewardRule
+    from Steward.models.objects.application import Application
     from Steward.models.objects.request import Request
 
 class AutomationContext:
@@ -20,6 +21,7 @@ class AutomationContext:
     server: "Server" = None
     npc: "NPC" = None
     request: "Request" = None
+    application: "Application" = None
 
     def __init__(self,
                  ctx: Union["StewardContext", discord.Interaction] = None,
@@ -29,6 +31,7 @@ class AutomationContext:
                  npc: Optional["NPC"] = None,
                  log: Optional["StewardLog"] = None,
                  request: Optional["Request"] = None,
+                 application: Optional["Application"] = None,
                  **kwargs
                  ):
             
@@ -39,6 +42,7 @@ class AutomationContext:
         self.npc = npc
         self.log=log
         self.request = request
+        self.application = application
         
         # Any extras
         for key, value in kwargs.items():

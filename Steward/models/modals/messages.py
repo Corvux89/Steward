@@ -33,4 +33,3 @@ class SayEditModal(ui.DesignerModal):
         await interaction.response.defer()
         self.stop()
         await self.webhook.edit(content)
-        pass

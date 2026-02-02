@@ -190,7 +190,7 @@ class Requestview(BaseRequestView):
         await self.refresh_content(interaction)
         
 
-class BastRequestReviewView(ui.DesignerView):
+class BaseRequestReviewView(ui.DesignerView):
     def __init__(self, bot: "StewardBot", **kwargs):
         self._bot = bot
 

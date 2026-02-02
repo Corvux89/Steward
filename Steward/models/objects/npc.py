@@ -69,7 +69,7 @@ class NPC:
             )
         )
 
-        await execute_query(self.db, query, QueryResultType.none)
+        await execute_query(self._db, query, QueryResultType.none)
 
     async def upsert(self) -> None:
         update_dict = {

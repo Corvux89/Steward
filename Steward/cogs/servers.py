@@ -8,6 +8,7 @@ from timeit import default_timer as timer
 
 from Steward.bot import StewardBot, StewardContext
 from Steward.models.objects.activityPoints import ActivityPoints
+from Steward.models.objects.enum import RuleTrigger
 from Steward.models.objects.exceptions import StewardError
 from Steward.models.objects.levels import Levels
 from Steward.models.objects.npc import NPC
@@ -59,6 +60,10 @@ class ServerCog(commands.Cog):
         discord.OptionChoice(
             "Rules",
             value="rules"
+        ),
+        discord.OptionChoice(
+            "Applications",
+            value="applications"
         ),
         discord.OptionChoice(
             "All",
@@ -137,6 +142,15 @@ class ServerCog(commands.Cog):
                     filename="Rules.csv"
                 )
             )
+
+        if config_item == "applications" or config_item == "all":
+            files.append(
+                discord.File(
+                    await self._application_config(ctx.server),
+                    description="Applications Configuration",
+                    filename="Applications.csv"
+                )
+            )
         
 
         await ctx.respond(files=files)
@@ -185,13 +199,15 @@ class ServerCog(commands.Cog):
             elif f_name_lower.startswith('rules'):
                 await self._rules_config(ctx.server, text)
 
+            elif f_name_lower.startswith('applications'):
+                await self._application_config(ctx.server, text)
+
             else:
                 return await ctx.respond("I don't know aht you're trying to do")
             await ctx.respond(f"Successfully imported configuration!")
         
         except Exception as e:
             raise StewardError(e)
-
 
     async def _server_config(self, server: Server, csv_text: str = None):
         header_mapping = {
@@ -251,7 +267,7 @@ class ServerCog(commands.Cog):
         if csv_text:
             reader = csv.DictReader(io.StringIO(csv_text))
             for row in reader:
-                data = {header_mapping[k]: v for k, v in row.items() if k in header_mapping}
+                data = {k: row.get(v) for k, v in header_mapping.items() if v in row}
                 data['guild_id'] = server.id
 
                 if 'roles' in data and data['roles']:
@@ -261,6 +277,7 @@ class ServerCog(commands.Cog):
 
                 npc = NPC(self.bot.db, **data)
                 await npc.upsert()
+                await npc.register_command(self.bot)
             await server.load_npcs()
 
         else:
@@ -277,6 +294,7 @@ class ServerCog(commands.Cog):
             output.seek(0)
             return output
     
+    #TODO: Verify
     async def _activity_point_config(self, server: Server, csv_text: str = None):
         header_mapping = {
             "level": "Level",
@@ -317,6 +335,7 @@ class ServerCog(commands.Cog):
             output.seek(0)
             return output
     
+    #TODO: VERify
     async def _level_config(self, server: Server, csv_text: str = None):
         header_mapping = {
             "level": "Level",
@@ -351,7 +370,8 @@ class ServerCog(commands.Cog):
 
             output.seek(0)
             return output
-        
+    
+    # TODO: Verify
     async def _activities_config(self, server: Server, csv_text: str = None):
         header_mapping = {
             "name": "Name",
@@ -404,7 +424,6 @@ class ServerCog(commands.Cog):
 
     async def _rules_config(self, server: Server, csv_text: str = None):
         from Steward.models.objects.rules import StewardRule
-        import json
 
         header_mapping = {
             "id": "id",
@@ -444,6 +463,9 @@ class ServerCog(commands.Cog):
                         raise StewardError(f"Invalid JSON in action_data for rule '{data.get('name')}': {data['action_data']}")
                 else:
                     data['action_data'] = {}
+
+                if 'trigger' in data and data['trigger']:
+                    data['trigger'] = RuleTrigger.from_string(data['trigger'])
                 
             
                 existing_rule = await StewardRule.fetch(self.bot.db, server.id,  id=data['id'] if 'id' in data else None, name=data['name'])
@@ -475,6 +497,44 @@ class ServerCog(commands.Cog):
                         row[v] = k.name
                     else:
                         row[v] = data.get(k)
+                writer.writerow(row)
+
+            output.seek(0)
+            return output
+        
+    async def _application_config(self, server: Server, csv_text: str = None):
+        from Steward.models.objects.application import ApplicationTemplate
+
+        header_mapping = {
+            "name": "Name",
+            "template": "Template",
+            "character_specific": "Character Specific?"
+        }
+
+        if csv_text:
+            reader = csv.DictReader(io.StringIO(csv_text))
+
+            for row in reader:
+                data = {k: row.get(v) for k, v in header_mapping.items() if v in row}
+                data['guild_id'] = server.id
+
+                if 'character_specific' in data:
+                    data['character_specific'] = data["character_specific"].lower() in ('true', '1', 'yes')
+
+                application = ApplicationTemplate(self.bot.db, **data)
+                await application.upsert()
+
+        else:
+            schema = Activity.ActivitySchema(self.bot.db)
+            output = io.StringIO()
+            writer = csv.DictWriter(output, fieldnames=header_mapping.values(), quoting=csv.QUOTE_NONNUMERIC)
+            writer.writeheader()
+
+            applications = await ApplicationTemplate.fetch_all(self.bot.db, server.id)
+
+            for application in applications:
+                data = schema.dump(application)
+                row = {header_mapping[k]: v for k, v in data.items() if k in header_mapping}
                 writer.writerow(row)
 
             output.seek(0)

@@ -7,6 +7,8 @@ from timeit import default_timer as timer
 
 from Steward.bot import StewardBot
 from Steward.models.automation.context import AutomationContext
+from Steward.models.objects import request
+from Steward.models.objects.application import Application
 from Steward.models.objects.character import Character
 from Steward.models.objects.enum import RuleTrigger
 from Steward.models.objects.log import StewardLog
@@ -81,10 +83,16 @@ class RulesCog(commands.Cog):
     async def on_new_request(self, request: Request):
         guild = self.bot.get_guild(request.guild_id)
         server = await Server.get_or_create(self.bot.db, guild)
-        rules = await execute_rules_for_trigger(self.bot, server, RuleTrigger.new_request.name, request=request)
+        rules = await execute_rules_for_trigger(self.bot, server, RuleTrigger.new_request.name, request=request, player=request.player)
 
         log.info(rules)
 
+    @commands.Cog.listener()
+    async def on_new_application(self, application: Application):
+        server = await Server.get_or_create(self.bot.db, application.player.guild)
+        rules = await execute_rules_for_trigger(self.bot, server, RuleTrigger.new_application.name, application=application, player=application.player, character=application.character)
+
+        log.info(rules)
 
     # Scheduled Rules Stuff
     @commands.Cog.listener()

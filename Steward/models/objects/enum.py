@@ -46,3 +46,4 @@ class RuleTrigger(StewardEnum):
     scheduled = "Scheduled"
     staff_point = "Staff Point"
     new_request = "New Request"
+    new_application = "New Application"
