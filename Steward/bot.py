@@ -24,7 +24,7 @@ from Steward.models.objects.player import Player
 from Steward.models.objects.activity import Activity
 from Steward.models.objects.rules import StewardRule
 from Steward.models.objects.request import Request
-from Steward.models.objects.application import ApplicationTemplate
+from Steward.models.objects.form import FormTemplate, Application
 
 log = logging.getLogger(__name__)
 

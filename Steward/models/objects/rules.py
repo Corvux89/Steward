@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime, timezone, timedelta
 import json
+import logging
 import uuid
 import sqlalchemy as sa
 
@@ -16,6 +17,8 @@ from Steward.models.objects.enum import QueryResultType, RuleTrigger
 from Steward.models.views.request import BaseRequestReviewView
 from Steward.utils.dbUtils import execute_query
 from Steward.utils.discordUtils import chunk_text, get_webhook
+
+log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ...bot import StewardBot
@@ -661,7 +664,7 @@ class StewardRule:
             await context.request.delete()
         
     async def _post_application(self, action: dict, bot: "StewardBot", context: "AutomationContext", results: []):
-        from Steward.models.objects.application import Application
+        from Steward.models.objects.form import Application
 
         if self.trigger != RuleTrigger.new_application:
             results.append({'type': self.trigger.name, 'success': False, 'error': f'Improper trigger'})
@@ -689,27 +692,44 @@ class StewardRule:
 
         chunks = chunk_text(application.output)
 
-        for i, chunk in enumerate(chunks):
-            if i == 0:
-                message = await webhook.send(
-                    username=application.player.display_name if application.template.character_specific == False else application.character.name,
-                    avatar_url=(
-                        application.player.avatar.url if application.player.avatar else None if application.template.character_specific == False else application.character.avatar_url
-                    ),
-                    content=chunk,
-                    wait=True
-                )
+        if application.message_id:
+            await webhook.edit_message(
+                application.message_id,
+                content=chunks[0]
+            )
 
-                thread = await message.create_thread(
-                    name=f"{application.player.display_name if application.template.character_specific == False else application.character.name}",
-                    auto_archive_duration=10080
-                )
-            else:
-                await thread.send(chunk)
+            if len(chunks) > 1:
+                log.info("too many chunks")
+        else:
+            for i, chunk in enumerate(chunks):
+                if i == 0:
+                    message = await webhook.send(
+                        username=application.player.display_name if application.template.character_specific == False else application.character.name,
+                        avatar_url=(
+                            application.player.avatar.url if application.player.avatar else None if application.template.character_specific == False else application.character.avatar_url
+                        ),
+                        content=chunk,
+                        wait=True
+                    )
 
-        await thread.send(
-            f"Need to make an edit? Use `/edit_application` in this thread."
-        )
+                    application.message_id = message.id
+                    await application.upsert()
+
+                    if application.template.character_specific:
+                        name = application.character.name
+                    else:
+                        name = application.player.display_name
+
+                    thread = await message.create_thread(
+                        name=f"{name} - {application.template.name}",
+                        auto_archive_duration=10080
+                    )
+                else:
+                    await thread.send(chunk)
+
+            await thread.send(
+                f"Need to make an edit? Use `/edit_application` in this thread."
+            )
 
         results.append({'type': self.trigger.name, 'success': True})    
 

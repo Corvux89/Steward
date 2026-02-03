@@ -4,12 +4,12 @@ import discord.ui as ui
 
 from Steward.bot import StewardBot, StewardContext
 from Steward.models.modals.player import NewCharacterModal, PlayerInformationModal
-from Steward.models.modals import confirm_modal, get_value_modal
+from Steward.models.modals import get_value_modal
 from Steward.models.objects.character import Character
 from Steward.models.objects.enum import ApplicationType, LogEvent, RuleTrigger
 from Steward.models.objects.log import StewardLog
 from Steward.models.objects.player import Player
-from Steward.models.views import StewardView
+from Steward.models.views import StewardView, confirm_view
 from Steward.utils.discordUtils import chunk_text, try_delete
 from Steward.utils.viewUitils import get_character_header, get_character_info_sections, get_character_select_option, get_player_header
 from constants import EDIT_EMOJI
@@ -411,7 +411,7 @@ class CharacterInfoView(BaseInfoView):
         )
 
         if new_ap is not None and old_ap != new_ap:
-            if await confirm_modal(
+            if await confirm_view(
                 interaction,
                 (
                     f"Adjusting a characters activity points, will not reward them if they change levels.\n\n"
@@ -437,7 +437,7 @@ class CharacterInfoView(BaseInfoView):
         notes = f"Level up!: `{self.character.level}` -> `{new_level}`"
 
         if self.character.xp < min_xp:
-            if await confirm_modal(
+            if await confirm_view(
                 interaction,
                 (
                     f"`{self.character.name}` only has `{self.character.xp}` xp. Which is less than the defined `{min_xp}` for level {new_level}.\n\n"
@@ -466,7 +466,7 @@ class CharacterInfoView(BaseInfoView):
 
     
     async def _on_character_inactivate(self, interaction: discord.Interaction):
-        if await confirm_modal(
+        if await confirm_view(
             interaction,
             f"Are you sure you wish to inactivate this character?"
         ):
@@ -766,7 +766,7 @@ class CharacterActivityView(BaseInfoView):
         )
 
     async def _on_clear_channel(self, interaction: discord.Interaction):
-        if await confirm_modal(
+        if await confirm_view(
             self.ctx,
             f"Are you sure you want to clear all {len(self.character.channels)} channel overrides for this character?"
         ):

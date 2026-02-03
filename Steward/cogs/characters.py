@@ -4,15 +4,16 @@ import logging
 
 from discord.ext import commands
 from Steward.bot import StewardBot, StewardContext
-from Steward.models.modals.application import ApplicationModal
 from Steward.models.modals.reward import RewardModal
-from Steward.models.objects.application import Application, ApplicationTemplate
+from Steward.models.views import confirm_view
+from Steward.models.objects.form import Application, FormTemplate
 from Steward.models.objects.exceptions import CharacterNotFound, StewardError
+from Steward.models.objects.character import Character
 from Steward.models.objects.player import Player
 from Steward.models.objects.webhook import StewardWebhook
 from Steward.models.views.player import PlayerInfoView
 from Steward.models.views.request import BaseRequestReviewView, Requestview
-from Steward.utils.autocompleteUtils import application_autocomplete, character_autocomplete
+from Steward.utils.autocompleteUtils import form_autocomplete, character_autocomplete
 from Steward.utils.discordUtils import dm_check, is_admin, is_staff, try_delete
 
 
@@ -138,7 +139,7 @@ class CharacterCog(commands.Cog):
 
     @commands.slash_command(
         name="apply",
-        description="Apply for something"
+        description="Apply for something or fill out a form"
     )
     async def application(
         self,
@@ -146,66 +147,125 @@ class CharacterCog(commands.Cog):
         application: discord.Option(
             str,
             description="What are you applying for?",
-            autocomplete=application_autocomplete
+            autocomplete=form_autocomplete
         )
     ):
-        template = await ApplicationTemplate.fetch(self.bot.db, ctx.server.id, application)
-
+        from Steward.models.views.forms import FormView
+        from Steward.models.modals import get_character_select_modal
+        
+        template = await FormTemplate.fetch(self.bot.db, ctx.server.id, application)
+        
         if not template:
-            raise StewardError("Cannot find application template")
+            raise StewardError(f"Application template '{application}' not found")
         
-        modal = ApplicationModal(self.bot, ctx.player, template)
-        await ctx.send_modal(modal)
-
-    # TODO: At some point this needs to handle the chunks that could come out of the initial application
-    @commands.slash_command(
-        name="edit_application",
-        description="Edit your application"
-    )
-    async def edit_application(
-        self, 
-        ctx: "StewardContext"
-    ):
-        if not isinstance(ctx.channel, discord.Thread):
-            raise StewardError("Application not found")
-        
-        first_message = await ctx.channel.parent.fetch_message(ctx.channel.id)
-
-        if not first_message.author.bot:
-            raise StewardError("This isn't an application thread")
-        
-        match = re.match(f'^\*+(.+?)\*+', first_message.content)
-        if not match:
-            raise StewardError("Application type not found")
-
-        application_type = match.group(1)
-
-        if not application_type:
-            raise StewardError("Application type not found")
-        
-        if not (template := await ApplicationTemplate.fetch(self.bot.db, ctx.server.id, application_type)):
-            raise StewardError("Application not found")
-        
-        if not first_message.mentions or  ctx.author != first_message.mentions[0]:
-            raise StewardError("You don't own this application")
-        
-        character = None
-        if template.character_specific == True:
-            character = next(
-                (c for c in ctx.player.active_characters if c.name == first_message.author.name),
+        # Get character if template requires it - show modal popup
+        char_obj = None
+        if template.character_specific:
+            if not ctx.player.active_characters:
+                raise StewardError("You don't have any active characters. Please create a character first.")
+            
+            character_name = await get_character_select_modal(
+                ctx,
+                ctx.player.active_characters,
+                title=f"Select Character for {template.name}"
+            )
+            
+            if not character_name:
+                await ctx.respond("Character selection cancelled.", ephemeral=True)
+                return
+            
+            char_obj = next(
+                (c for c in ctx.player.active_characters if c.name == character_name),
                 None
             )
-
-        # Strip out the added header
-        app_content = first_message.content.split('\n\n',1)[1]
+            
+            if not char_obj:
+                raise CharacterNotFound(ctx.player)
         
-        application = Application(
-            ctx.player,
-            template,
-            character=character,
-            content=app_content
+        # Check for existing draft application
+        existing_app = await Application.fetch_draft(
+            self.bot.db,
+            ctx.guild.id,
+            ctx.author.id,
+            template.name,
+            char_obj.id if char_obj else None
         )
 
-        modal = ApplicationModal(self.bot, ctx.player, template, application=application, message=first_message)
+        if existing_app:
+            cont = await confirm_view(
+                ctx,
+                "I found an existing application. Do you wish to continue filling it out?"
+            )
 
-        await ctx.send_modal(modal)
+            if cont is False:
+                discard = await confirm_view(
+                    ctx,
+                    "Do you wish to discard the old draft?"
+                )
+
+                if discard:
+                    await existing_app.delete()
+                    existing_app = None
+                else:
+                    await ctx.respond("Application cancelled", ephemeral=True)
+                    return
+            elif cont is None:
+                await ctx.respond("Application confirmation timed out", ephemeral=True)
+                return
+        
+        if existing_app:
+            # Load template and relationships for existing app
+            existing_app.template = template
+            existing_app.player = ctx.player
+            existing_app.character = char_obj
+            
+        # Create and send the form view (with existing app if found)
+        form_view = FormView(self.bot, ctx, template, character=char_obj, application=existing_app)
+        await form_view.send()
+        
+
+    @commands.slash_command(
+        name="edit_application",
+        description="Edit a submitted application"
+    )
+    async def edit_application(
+        self,
+        ctx: "StewardContext"
+    ):
+        from Steward.models.views.forms import FormView
+        from Steward.models.modals import get_character_select_modal
+
+        if not isinstance(ctx.channel, discord.Thread):
+            raise StewardError("This command must be run inside an application thread")
+
+        thread_message_id = ctx.channel.id
+        application_obj = await Application.fetch_by_message_id(
+            self.bot.db,
+            ctx.guild.id,
+            thread_message_id
+        )
+
+        if not application_obj:
+            raise StewardError("Application not found for this thread")
+
+        if application_obj.player_id != ctx.author.id:
+            raise StewardError("You don't own this application")
+
+        template = await FormTemplate.fetch(self.bot.db, ctx.server.id, application_obj.template_name)
+        if not template:
+            raise StewardError("Application template not found")
+
+        character = None
+        if application_obj.character_id:
+            character = await Character.fetch(self.bot.db, application_obj.character_id)
+            if not character or character.player_id != ctx.author.id:
+                raise StewardError("Character not found for this application")
+
+        application_obj.template = template
+        application_obj.player = ctx.player
+        application_obj.character = character
+
+        application_obj.status = "draft"
+
+        form_view = FormView(self.bot, ctx, template, character=character, application=application_obj)
+        await form_view.send()

@@ -152,7 +152,7 @@ class Request:
                             sa.tuple_(
                                 self.request_characters_table.c.player_id,
                                 self.request_characters_table.c.character_id
-                            ).in_(current_pairs)
+                            ).in_(list(current_pairs))
                         )
                     )
                 )

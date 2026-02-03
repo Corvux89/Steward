@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from Steward.models.objects.npc import NPC
     from Steward.models.objects.log import StewardLog
     from Steward.models.objects.rules import StewardRule
-    from Steward.models.objects.application import Application
+    from Steward.models.objects.form import Application
     from Steward.models.objects.request import Request
 
 class AutomationContext:

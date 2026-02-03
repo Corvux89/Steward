@@ -1,4 +1,4 @@
-from typing import Type
+from typing import Optional, Type, Union
 import discord
 import discord.ui as ui
 
@@ -141,4 +141,53 @@ class StewardView(ui.DesignerView):
             await interaction.response.edit_message(view=view)
 
 
-            
+# Basic view for a basic prompt
+class ConfirmView(ui.View):
+    def __init__(self, user_id: int, timeout: int = 30):
+        super().__init__(timeout=timeout)
+        self.user_id = user_id
+        self.confirm: Optional[bool] = None
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return interaction.user.id == self.user_id
+
+    @ui.button(label="Yes", style=discord.ButtonStyle.success)
+    async def yes_button(self, _: ui.Button, interaction: discord.Interaction):
+        self.confirm = True
+        await interaction.response.defer()
+        self.stop()
+
+    @ui.button(label="No", style=discord.ButtonStyle.danger)
+    async def no_button(self, _: ui.Button, interaction: discord.Interaction):
+        self.confirm = False
+        await interaction.response.defer()
+        self.stop()
+
+async def confirm_view(
+        ctx: Union[discord.ApplicationContext, discord.Interaction],
+        prompt: str,
+        *,
+        timeout: int = 30,
+        ephemeral: bool = True
+) -> Optional[bool]:
+    view = ConfirmView(ctx.user.id if hasattr(ctx, "user") else ctx.author.id, timeout=timeout)
+    message: Optional[discord.Message] = None
+
+    if hasattr(ctx, "respond"):
+        response = await ctx.respond(prompt, view=view, ephemeral=ephemeral)
+        if isinstance(response, discord.Message):
+            message = response
+        elif hasattr(response, "message"):
+            message = response.message
+    else:
+        await ctx.response.send_message(prompt, view=view, ephemeral=ephemeral)
+        if hasattr(ctx, "original_response"):
+            try:
+                message = await ctx.original_response()
+            except Exception:
+                message = None
+
+    await view.wait()
+    if message:
+        await try_delete(message)
+    return view.confirm

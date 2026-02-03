@@ -8,7 +8,7 @@ from timeit import default_timer as timer
 from Steward.bot import StewardBot
 from Steward.models.automation.context import AutomationContext
 from Steward.models.objects import request
-from Steward.models.objects.application import Application
+from Steward.models.objects.form import Application
 from Steward.models.objects.character import Character
 from Steward.models.objects.enum import RuleTrigger
 from Steward.models.objects.log import StewardLog

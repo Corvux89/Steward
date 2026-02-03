@@ -123,7 +123,7 @@ def get_character_info_sections(player: Player, server: Server, callback: Corout
                     f"**{char.name}{'*' if char.primary_character == True else ''}**\n"
                     f"-# Level {char.level}\n"
                     f"-# {char.species_str} | {char.class_str}\n"
-                    f"-# {char.currency} {server.currency_str} | {char.xp} xp"
+                    f"-# {char.currency:,} {server.currency_str} | {char.xp:,} xp"
                 ),
                 accessory=char_button
             )

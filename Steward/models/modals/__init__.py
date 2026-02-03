@@ -98,43 +98,160 @@ async def get_value_modal(
     
     return value
 
-class ConfirmModal(ui.DesignerModal):
-    confirm: bool = False
-    
-    def __init__(
-            self,
-            prompt: str,
-            title: str,
-    ):
+
+class CharacterSelectModal(ui.DesignerModal):
+    """Modal for selecting a character from a list."""
+    selected_character: Optional[str] = None
+
+    def __init__(self, characters: list, title: str = "Select Character"):
+        """
+        Initialize a modal for character selection.
+        
+        Args:
+            characters (list): List of Character objects to choose from
+            title (str): The title of the modal dialog
+        """
+        # Create options for the select menu
+        options = [
+            discord.SelectOption(label=char.name, value=char.name)
+            for char in characters
+        ]
+        
         super().__init__(
-            ui.TextDisplay(
-                content=prompt
+            ui.Label(
+                "Character",
+                ui.Select(
+                    placeholder="Choose a character...",
+                    options=options,
+                    custom_id="character_select"
+                )
             ),
             title=title
         )
 
     async def callback(self, interaction):
-        self.confirm = True
+        selected = self.get_item("character_select").values
+        if selected:
+            self.selected_character = selected[0]
         await interaction.response.defer()
         self.stop()
 
-    async def on_timeout(self):
-        self.confirm = False
-        self.stop()
 
-async def confirm_modal(
+async def get_character_select_modal(
         ctx: Union[discord.ApplicationContext, discord.Interaction],
-        prompt: str,
-        title: str = "Confirm?"
-) -> bool:
-    modal = ConfirmModal(prompt, title)
-
+        characters: list,
+        title: str = "Select Character"
+    ) -> Optional[str]:
+    """
+    Display a modal dialog to select a character.
+    
+    Args:
+        ctx: The context or interaction object to send the modal through
+        characters: List of Character objects to choose from
+        title: The title of the modal dialog
+    
+    Returns:
+        The name of the selected character, or None if no selection was made
+    """
+    modal = CharacterSelectModal(characters, title)
+    
     if hasattr(ctx, "send_modal"):
         await ctx.send_modal(modal)
     else:
         await ctx.response.send_modal(modal)
 
     await modal.wait()
+    
+    return getattr(modal, "selected_character", None)
 
-    return modal.confirm
 
+class DynamicFieldModal(ui.DesignerModal):
+    """Modal for capturing a single field value in a dynamic form."""
+    value: Optional[str] = None
+
+    def __init__(
+            self,
+            field: dict,
+            current_value: str = ""
+        ):
+        """
+        Initialize a modal for a dynamic form field.
+        
+        Args:
+            field (dict): Field configuration with keys:
+                - label (str): The field label
+                - key (str): The field key/identifier
+                - style (str): 'short' or 'long' text input
+                - required (bool): Whether the field is required
+                - max_length (int): Maximum character length
+                - placeholder (str, optional): Placeholder text
+            current_value (str): The current value of the field
+        """
+        label = field.get('label', 'Value')
+        placeholder = field.get('placeholder', '')
+        max_length = field.get('max_length', 1000)
+        required = field.get('required', False)
+        style = field.get('style', 'short')
+        description = field.get('description')
+
+        content = []
+
+        # Description
+        if description:
+            content.append(
+                ui.TextDisplay(description)
+            )
+
+        # Input field
+        text_style = discord.InputTextStyle.long if style == 'long' else discord.InputTextStyle.short
+        content.append(
+            ui.Label(
+                label,
+                ui.InputText(
+                    placeholder=placeholder or label,
+                    max_length=max_length,
+                    value=str(current_value) if current_value else "",
+                    custom_id="field_value",
+                    required=required,
+                    style=text_style
+                )
+            )
+        )
+
+        super().__init__(
+            *content,
+            title=f"Enter {label}"[:45]  # Discord title length limit
+        )
+
+    async def callback(self, interaction):
+        self.value = self.get_item("field_value").value
+        await interaction.response.defer()
+        self.stop()
+
+
+async def get_field_value_modal(
+        ctx: Union[discord.ApplicationContext, discord.Interaction],
+        field: dict,
+        current_value: str = ""
+    ) -> Optional[str]:
+    """
+    Display a modal dialog to get a field value from the user.
+    
+    Args:
+        ctx: The context or interaction object to send the modal through
+        field: Field configuration dictionary
+        current_value: The pre-filled value in the input field
+    
+    Returns:
+        The value entered by the user, or None if no value was provided
+    """
+    modal = DynamicFieldModal(field, current_value)
+    
+    if hasattr(ctx, "send_modal"):
+        await ctx.send_modal(modal)
+    else:
+        await ctx.response.send_modal(modal)
+
+    await modal.wait()
+    
+    return getattr(modal, "value", None)

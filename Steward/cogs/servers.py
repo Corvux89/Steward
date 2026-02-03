@@ -22,6 +22,7 @@ log = logging.getLogger(__name__)
 def setup(bot: StewardBot):
     bot.add_cog(ServerCog(bot))
 
+# TODO: Cleanup record removal/inactivation
 
 class ServerCog(commands.Cog):
     bot: StewardBot
@@ -62,8 +63,8 @@ class ServerCog(commands.Cog):
             value="rules"
         ),
         discord.OptionChoice(
-            "Applications",
-            value="applications"
+            "Forms",
+            value="forms"
         ),
         discord.OptionChoice(
             "All",
@@ -121,7 +122,7 @@ class ServerCog(commands.Cog):
                 discord.File(
                     await self._level_config(ctx.server),
                     description="Level Information",
-                    filename="Activity Points.csv"
+                    filename="Levels.csv"
                 )
             )
 
@@ -143,12 +144,12 @@ class ServerCog(commands.Cog):
                 )
             )
 
-        if config_item == "applications" or config_item == "all":
+        if config_item == "forms" or config_item == "all":
             files.append(
                 discord.File(
-                    await self._application_config(ctx.server),
-                    description="Applications Configuration",
-                    filename="Applications.csv"
+                    await self._form_config(ctx.server),
+                    description="Form Configuration",
+                    filename="forms.csv"
                 )
             )
         
@@ -199,8 +200,8 @@ class ServerCog(commands.Cog):
             elif f_name_lower.startswith('rules'):
                 await self._rules_config(ctx.server, text)
 
-            elif f_name_lower.startswith('applications'):
-                await self._application_config(ctx.server, text)
+            elif f_name_lower.startswith('forms'):
+                await self._form_config(ctx.server, text)
 
             else:
                 return await ctx.respond("I don't know aht you're trying to do")
@@ -294,7 +295,6 @@ class ServerCog(commands.Cog):
             output.seek(0)
             return output
     
-    #TODO: Verify
     async def _activity_point_config(self, server: Server, csv_text: str = None):
         header_mapping = {
             "level": "Level",
@@ -306,7 +306,7 @@ class ServerCog(commands.Cog):
         if csv_text:
             reader = csv.DictReader(io.StringIO(csv_text))
             for row in reader:
-                data = {header_mapping[k]: v for k, v in row.items() if k in header_mapping}
+                data = {k: row.get(v) for k, v in header_mapping.items() if v in row}
                 data['guild_id'] = server.id
 
                 data['level'] = int(data['level'])
@@ -335,7 +335,6 @@ class ServerCog(commands.Cog):
             output.seek(0)
             return output
     
-    #TODO: VERify
     async def _level_config(self, server: Server, csv_text: str = None):
         header_mapping = {
             "level": "Level",
@@ -346,7 +345,7 @@ class ServerCog(commands.Cog):
         if csv_text:
             reader = csv.DictReader(io.StringIO(csv_text))
             for row in reader:
-                data = {k: row[v] for k, v in header_mapping.items() if v in row}
+                data = {k: row.get(v) for k, v in header_mapping.items() if v in row}
                 data["guild_id"] = server.id
 
                 data["level"] = int(data["level"])
@@ -371,7 +370,6 @@ class ServerCog(commands.Cog):
             output.seek(0)
             return output
     
-    # TODO: Verify
     async def _activities_config(self, server: Server, csv_text: str = None):
         header_mapping = {
             "name": "Name",
@@ -384,7 +382,7 @@ class ServerCog(commands.Cog):
         if csv_text:
             reader = csv.DictReader(io.StringIO(csv_text))
             for row in reader:
-                data = {k: row[v] for k, v in header_mapping.items() if v in row}
+                data = {k: row.get(v) for k, v in header_mapping.items() if v in row}
                 data['guild_id'] = server.id
 
                 if 'limited' in data:
@@ -502,12 +500,12 @@ class ServerCog(commands.Cog):
             output.seek(0)
             return output
         
-    async def _application_config(self, server: Server, csv_text: str = None):
-        from Steward.models.objects.application import ApplicationTemplate
+    async def _form_config(self, server: Server, csv_text: str = None):
+        from Steward.models.objects.form import FormTemplate
 
         header_mapping = {
             "name": "Name",
-            "template": "Template",
+            "content": "Content",  # Changed from "fields" to "content" to match FormTemplate
             "character_specific": "Character Specific?"
         }
 
@@ -518,23 +516,35 @@ class ServerCog(commands.Cog):
                 data = {k: row.get(v) for k, v in header_mapping.items() if v in row}
                 data['guild_id'] = server.id
 
+                if 'content' in data and data['content']:
+                    try:
+                        data['content'] = json.loads(data['content'])
+                    except json.JSONDecodeError:
+                        raise StewardError(f"Invalid JSON in content for application template '{data.get('name')}': {data['content']}")
+
                 if 'character_specific' in data:
                     data['character_specific'] = data["character_specific"].lower() in ('true', '1', 'yes')
 
-                application = ApplicationTemplate(self.bot.db, **data)
+                application = FormTemplate(self.bot.db, **data)
                 await application.upsert()
 
         else:
-            schema = Activity.ActivitySchema(self.bot.db)
+            schema = FormTemplate.ApplicationTemplateSchema(self.bot.db)
             output = io.StringIO()
             writer = csv.DictWriter(output, fieldnames=header_mapping.values(), quoting=csv.QUOTE_NONNUMERIC)
             writer.writeheader()
 
-            applications = await ApplicationTemplate.fetch_all(self.bot.db, server.id)
+            applications = await FormTemplate.fetch_all(self.bot.db, server.id)
 
             for application in applications:
                 data = schema.dump(application)
-                row = {header_mapping[k]: v for k, v in data.items() if k in header_mapping}
+                row = {}
+                
+                for k, v in header_mapping.items():
+                    if k == 'content':
+                        row[v] = json.dumps(data.get(k, []))
+                    else:
+                        row[v] = data.get(k)
                 writer.writerow(row)
 
             output.seek(0)
