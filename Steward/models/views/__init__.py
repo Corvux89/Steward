@@ -168,7 +168,8 @@ async def confirm_view(
         prompt: str,
         *,
         timeout: int = 30,
-        ephemeral: bool = True
+        ephemeral: bool = True,
+        delete_prompt: bool = True
 ) -> Optional[bool]:
     view = ConfirmView(ctx.user.id if hasattr(ctx, "user") else ctx.author.id, timeout=timeout)
     message: Optional[discord.Message] = None
@@ -188,6 +189,6 @@ async def confirm_view(
                 message = None
 
     await view.wait()
-    if message:
+    if message and delete_prompt:
         await try_delete(message)
     return view.confirm

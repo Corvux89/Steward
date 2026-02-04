@@ -5,6 +5,7 @@ import logging
 from discord.ext import commands
 from Steward.bot import StewardBot, StewardContext
 from Steward.models.modals.reward import RewardModal
+from Steward.models.objects.request import Request
 from Steward.models.views import confirm_view
 from Steward.models.objects.form import Application, FormTemplate
 from Steward.models.objects.exceptions import CharacterNotFound, StewardError
@@ -12,7 +13,7 @@ from Steward.models.objects.character import Character
 from Steward.models.objects.player import Player
 from Steward.models.objects.webhook import StewardWebhook
 from Steward.models.views.player import PlayerInfoView
-from Steward.models.views.request import BaseRequestReviewView, Requestview
+from Steward.models.views.request import PlayerRequestView, StaffRequestView, Requestview
 from Steward.utils.autocompleteUtils import form_autocomplete, character_autocomplete
 from Steward.utils.discordUtils import dm_check, is_admin, is_staff, try_delete
 
@@ -31,13 +32,33 @@ class CharacterCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_db_connected(self):
-        self.bot.add_view(BaseRequestReviewView.new(self.bot))
+        requests = await Request.fetch_all(self.bot)
+        for request in requests:
+            refresh = True if request.staff_message and request.player_message else False
+
+            if refresh:
+                staff_view = StaffRequestView(self.bot, request=request)
+                player_view = PlayerRequestView(self.bot, request=request)
+
+                try:
+                    await request.staff_message.edit(view=staff_view)
+                    await request.player_message.edit(view=player_view)
+                except:
+                    pass
+            else:
+                await request.delete()
+
 
     character_admin_commands = discord.SlashCommandGroup(
         "character_admin",
         "Character administration commands",
         contexts=[discord.InteractionContextType.guild]
     )
+
+    @commands.Cog.listener()
+    async def on_message_delete(self, message: discord.Message):
+        if (request := await Request.fetch(self.bot, message.id)):
+            await request.delete()
 
     @commands.command(name="say", contexts=[discord.InteractionContextType.guild])
     @commands.check(dm_check)

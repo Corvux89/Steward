@@ -1,4 +1,3 @@
-# TODO: Staff backlog/worklist channel
 # TODO: Market
 # - Auction House (silent and verbose)
 # - Merchant

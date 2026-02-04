@@ -96,6 +96,4 @@ class RewardModal(ui.DesignerModal):
         )
 
         await interaction.respond(f"Activity Logged!", ephemeral=True)
-
-        # await interaction.response.defer()
         self.stop()

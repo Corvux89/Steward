@@ -3,17 +3,20 @@ import discord.ui as ui
 
 
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 from Steward.models.embeds import ErrorEmbed
 from Steward.models.modals import PromptModal
 from Steward.models.objects.activity import Activity
 from Steward.models.objects.character import Character
+from Steward.models.objects.enum import LogEvent
 from Steward.models.objects.exceptions import StewardError
+from Steward.models.objects.log import StewardLog
 from Steward.models.objects.player import Player
 from Steward.models.objects.request import Request
-from Steward.models.views import StewardView
-from Steward.utils.viewUitils import get_character_header, get_character_request_sections, get_character_select_option, get_player_header
-from constants import DENIED_EMOJI
+from Steward.models.views import StewardView, confirm_view
+from Steward.utils.discordUtils import try_delete
+from Steward.utils.viewUitils import get_activity_select_option, get_character_header, get_character_request_sections, get_character_select_option, get_player_header
+from constants import CHANNEL_BREAK, DENIED_EMOJI
 
 if TYPE_CHECKING:
     from Steward.bot import StewardBot, StewardContext
@@ -34,8 +37,8 @@ class BaseRequestView(StewardView):
         
 
 class Requestview(BaseRequestView):
-    def __init__(self, bot: "StewardBot", ctx: "StewardContext", player: Player, character: Character, **kwargs):
-        self.owner = ctx.author
+    def __init__(self, bot: "StewardBot", ctx: Union["StewardContext", discord.Interaction], player: Player, character: Character, **kwargs):
+        self.owner = ctx.user
         self.bot = bot
         self.ctx = ctx
         self.player = player
@@ -47,7 +50,9 @@ class Requestview(BaseRequestView):
                 self.bot,
                 guild_id=ctx.guild.id,
                 player_id=player.id,
-                channel_id=ctx.channel.id,
+                player_channel_id=ctx.channel.id,
+                player_message=ctx.message,
+                server=ctx.server if hasattr(ctx, "server") else None,
                 player_characters={player: [character]}
             )
         )
@@ -114,13 +119,51 @@ class Requestview(BaseRequestView):
             label="Cancel",
             style=discord.ButtonStyle.red
         )
-        exit_button.callback = self.timeout_callback
+        exit_button.callback = self._cancel_button
         button_row.append(exit_button)
 
         content.append(
             ui.ActionRow(*button_row)
         )
         super().__init__(*content)
+
+    async def on_timeout(self):
+        if self.request.staff_message:
+            request = await Request.fetch(self.bot, self.request.staff_message_id)
+            if request:
+                view = PlayerRequestView(self.bot, request=request)
+                await view.build_content()
+                
+                await  self.message.edit(view=view)
+        else:
+            if (
+            not self._message
+            or self._message.flags.ephemeral
+            or (self._message.channel.type == discord.ChannelType.private)
+            ):
+                message = self.parent
+            else:
+                message = self.message
+
+            if message:
+                self.remove_all_buttons_and_action_rows()
+                await self.message.edit(view=self)
+
+                if self.delete_on_timeout:
+                    await try_delete(message)
+
+    async def _cancel_button(self, interaction: discord.Interaction):
+        if self.request.staff_message_id:
+            request = await Request.fetch(self.bot, self.request.staff_message_id)
+            view = PlayerRequestView(self.bot, request=request)
+            await view.build_content()
+            
+            if interaction.response.is_done():
+                await interaction.edit_original_message(view=view)
+            else:
+                await interaction.response.edit_message(view=view)
+        else:
+            await self.on_timeout()
         
     async def _on_player_select(self, interaction: discord.Interaction):
         member = self.get_item("add_player").values[0]
@@ -128,7 +171,7 @@ class Requestview(BaseRequestView):
             self.selected_player = await Player.get_or_create(self.bot.db, member)
 
             if not self.selected_player.active_characters:
-                await interaction.channel.send(embed=ErrorEmbed(f"`{self.selected_player.display_name}` has not active characters"))
+                await interaction.channel.send(embed=ErrorEmbed(f"No character information found for `{self.selected_player.mention}`"))
                 return await self.refresh_content(interaction)
 
             if self.selected_player not in self.request.player_characters:
@@ -169,11 +212,19 @@ class Requestview(BaseRequestView):
         await self.refresh_content(interaction)
 
     async def _submit_button(self, interaction: discord.Interaction):
+        self.request.player_message_id = interaction.message.id
+        self.request.player_message = interaction.message
         self.request = await self.request.upsert()
 
-        self.bot.dispatch("new_request", self.request)
-        await self.on_timeout()
+        view = PlayerRequestView(self.bot, request=self.request)
 
+        if interaction.response.is_done():
+                await interaction.edit_original_message(view=view)
+        else:
+            await interaction.response.edit_message(view=view)
+
+        
+        self.bot.dispatch("new_request", self.request)
 
     async def _remove_character(self, interaction: discord.Interaction):
         char_id = interaction.data["custom_id"][7:]
@@ -190,49 +241,172 @@ class Requestview(BaseRequestView):
         await self.refresh_content(interaction)
         
 
-class BaseRequestReviewView(ui.DesignerView):
+class StaffRequestView(StewardView):
+    __copy_attrs__ = [
+        "bot", "request", "activity"
+    ]
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        return True
+    
+    async def refresh_content(self, interaction: discord.Interaction):
+        view = StaffRequestView(self.bot, request=self.request, activity=self.activity)
+
+        if interaction.response.is_done():
+            await interaction.edit_original_message(view=view)
+        else:
+            await interaction.response.edit_message(view=view)
+
     def __init__(self, bot: "StewardBot", **kwargs):
-        self._bot = bot
+        self.bot = bot
 
         self.request: Request = kwargs.get('request')
-        super().__init__(
-            ui.TextDisplay("Coming soon!"),
-            timeout=None
-        )
-
-    @classmethod
-    def new(cls, bot: "StewardBot"):
-        inst = cls(bot)
-        return inst
-    
-    async def build_content(self):
-        player = await self.request.player()
-        self.clear_items()
+        self.activity = kwargs.get('activity')
 
         container = ui.Container(
-                ui.TextDisplay("# REQUEST FOR:"),
-                get_player_header(player),
-                ui.Separator()
-            )
-
-        
+            ui.TextDisplay("## REQUEST FROM"),
+            get_player_header(self.request.primary_player),
+            ui.TextDisplay(f"**From Channel**: {self.request.player_channel.jump_url}"),
+            ui.Separator()
+        )
 
         get_character_request_sections(container, self.request)
 
-        self.add_item(container)
+        if self.request.notes:
+            container.add_item(
+                ui.TextDisplay(f"## Notes\n{self.request.notes}")
+            )
+
+        activity_select = get_activity_select_option(self.request.server, self.activity, self._activity_select)
+
+        # Approve Button
+        approve_button = ui.Button(
+            label="Approve",
+            style=discord.ButtonStyle.green,
+            custom_id="approve_request"
+        )
+        approve_button.callback = self._approve_button
+
+        # Cancel Button 
+        cancel_button = ui.Button(
+            label="Cancel",
+            style=discord.ButtonStyle.red,
+            custom_id="cancel_request"
+        )
+        cancel_button.callback = self._cancel_button
+
+        super().__init__(
+            container,
+            ui.ActionRow(activity_select),
+            ui.ActionRow(approve_button, cancel_button),
+            timeout=None
+        )
+
+    async def _activity_select(self, interaction: discord.Interaction):
+        act = interaction.data.get('values', [])[0]
+        self.activity = self.request.server.get_activity(act)
+
+        await self.refresh_content(interaction)
+
+    async def _cancel_button(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        
+        if await confirm_view(
+            interaction,
+            "Are you sure you want to cancel this request?",
+        ) == True:
+            await self.request.delete()
+
+    async def _approve_button(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        
+        if not self.activity:
+            return await interaction.followup.send("Select an activity first", ephemeral=True)
+        
+        if await confirm_view(
+            interaction,
+            f"Approve this request, and log it as `{self.activity.name}`?"
+        ) == True:
+            await self.request.approve(self.bot, self.activity, interaction.user)
+        else:
+            await self.refresh_content(interaction)
+
+
+class PlayerRequestView(StewardView):
+    __copy_attrs__ = [
+        "bot", "request"
+    ]
+
+    def __init__(self, bot: "StewardBot", **kwargs):
+        self.bot = bot
+
+        self.request: Request = kwargs.get('request')
+
+        self.owner = self.request.primary_player
+
+        container = ui.Container(
+            ui.TextDisplay("## Request Submitted!"),
+            get_player_header(self.request.primary_player),
+            ui.Separator()
+        )
+
+        get_character_request_sections(container, self.request)
 
         if self.request.notes:
-            self.add_item(ui.TextDisplay(f"# Notes\n{self.request.notes}"))
-        
+            container.add_item(
+                ui.TextDisplay(f"## Notes\n{self.request.notes}")
+            )
 
-    async def _button_1(self, interaction: discord.Interaction):
-        if not self.request:
-            self.request = await Request.fetch(self.bot, interaction.message.id)
-        
-        if not self.request:
-            raise StewardError("Request not Found")
-        
-        self.bot.dispatch("request_button_1")
-    
+        # Edit Button
+        edit_button = ui.Button(
+            label="Edit request",
+            style=discord.ButtonStyle.green,
+            custom_id="edit_request"
+        )
+        edit_button.callback = self._edit_button
 
+        # Cancel Button
+        cancel_button = ui.Button(
+            label="Cancel request",
+            style=discord.ButtonStyle.red,
+            custom_id="cancel_request"
+        )
+        cancel_button.callback = self._cancel_button
 
+        super().__init__(
+            container,
+            ui.ActionRow(edit_button, cancel_button),
+            timeout=None
+        )
+
+    async def _edit_button(self, interaction: discord.Interaction):
+        view = Requestview(self.bot, interaction, self.request.primary_player, self.request.primary_character, request=self.request)
+        await interaction.message.edit(view=view)
+
+    async def _cancel_button(self, interaction: discord.Interaction):
+        if await confirm_view(
+            interaction,
+            "Are you sure you want to cancel this request?"
+        ) == True:                
+            await self.request.delete()
+        
+class LoggedView(ui.DesignerView):
+    def __init__(self, request: Request, activity: Activity, log_user: discord.User):
+        container = ui.Container(
+            ui.TextDisplay("## Request Logged!"),
+            get_player_header(request.primary_player),
+            ui.Separator()
+        )
+
+        get_character_request_sections(container, request)
+
+        if request.notes:
+            container.add_item(
+                ui.TextDisplay(f"## Notes\n{request.notes}")
+            )
+
+        container.add_item(
+            ui.TextDisplay(f"-# {activity.name} logged by {log_user.display_name}")
+        )
+
+        super().__init__(container)

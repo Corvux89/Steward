@@ -181,8 +181,11 @@ class StewardBot(commands.Bot):
             error,
             (StewardError, discord.CheckFailure, StewardCommandError, commands.CheckFailure),
         ):
-            if isinstance(ctx, discord.Interaction):
-                return await ctx.channel.send(embed=ErrorEmbed(error))
+            if isinstance(ctx, (discord.Interaction, discord.ApplicationContext)):
+                if ctx.response.is_done():
+                    return await ctx.followup.send(embed=ErrorEmbed(error), ephemeral=True)
+                else:
+                    return await ctx.response.send_message(embed=ErrorEmbed(error), ephemeral=True)
             else:
                 return await ctx.send(embed=ErrorEmbed(error))
 

@@ -134,7 +134,7 @@ def get_character_info_sections(player: Player, server: Server, callback: Corout
 def get_character_request_sections(container: ui.Container, request: Request, callback: Coroutine = None):
     container.add_item(
         ui.TextDisplay(
-            "# Requested for:"
+            "## Requested for:"
         )
     )
 

@@ -433,7 +433,7 @@ class Server(discord.Guild):
         return str(self.currency_label) if self.currency_label and self.currency_label != "" else "Currency"
     
     def get_activity(self, act_name: str) -> Optional["Activity"]:
-        if not self.activities:
+        if not self.activities or not act_name:
             return None
         
         for activity in self.activities:

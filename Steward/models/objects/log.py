@@ -79,6 +79,9 @@ class StewardLog:
         self.invalid = kwargs.get("invalid", False)
         self.created_ts: datetime = kwargs.get("created_ts", datetime.now(timezone.utc))
 
+        self.original_xp: Decimal = kwargs.get("original_xp", 0)
+        self.original_currency: Decimal = kwargs.get("original_currency", 0)
+
         self.server: "Server" = kwargs.get("server")
         self.player: "Player" = kwargs.get("player")
         self.author: Union["Player", discord.User] = kwargs.get("author")
@@ -95,7 +98,9 @@ class StewardLog:
         sa.Column("event", sa.String, nullable=False),
         sa.Column("character_id", sa.UUID, sa.ForeignKey("characters.id"), nullable=True),
         sa.Column("activity_id", sa.UUID, sa.ForeignKey("activities.id"), nullable=True),
+        sa.Column("original_currency", sa.DECIMAL, nullable=False),
         sa.Column("currency", sa.DECIMAL, nullable=False),
+        sa.Column("original_xp", sa.DECIMAL, nullable=False),
         sa.Column("xp", sa.DECIMAL, nullable=False),
         sa.Column("notes", sa.String, nullable=True),
         sa.Column("invalid", sa.Boolean, nullable=False, default=False),
@@ -112,7 +117,9 @@ class StewardLog:
         event = fields.String()
         character_id = fields.UUID(allow_none=True, required=False)
         activity_id = fields.UUID(allow_none=True, required=False)
+        original_currency = fields.Decimal()
         currency = fields.Decimal()
+        original_xp = fields.Decimal()
         xp = fields.Decimal()
         notes = fields.String(allow_none=True, required=False)
         invalid = fields.Boolean()
@@ -131,7 +138,9 @@ class StewardLog:
             "event": self.event.name,
             "activity_id": self.activity.id if hasattr(self, "activity") and self.activity else self.activity_id if hasattr(self, "activity_id") and self.activity_id else None,
             "notes": getattr(self, "notes", None),
+            "original_currency": self.original_currency,
             "currency": self.currency,
+            "original_xp": self.original_xp,
             "xp": self.xp,
             "invalid": self.invalid
         }
@@ -271,6 +280,8 @@ class StewardLog:
         if isinstance(xp, str):
             xp = eval_numeric(xp, context)
 
+        original_currency = currency
+        original_xp = xp
         # Validations
         if activity and activity.limited:
             currency_limit = server.currency_limit(player, character)
@@ -322,7 +333,9 @@ class StewardLog:
             activity_id=activity.id if activity else  None,
             character=character if character else None,
             notes=notes,
+            original_currency=original_currency,
             currency=currency,
+            original_xp=original_xp,
             xp=xp
         )
 

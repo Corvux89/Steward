@@ -83,7 +83,7 @@ class RulesCog(commands.Cog):
     async def on_new_request(self, request: Request):
         guild = self.bot.get_guild(request.guild_id)
         server = await Server.get_or_create(self.bot.db, guild)
-        rules = await execute_rules_for_trigger(self.bot, server, RuleTrigger.new_request.name, request=request, player=request.player)
+        rules = await execute_rules_for_trigger(self.bot, server, RuleTrigger.new_request.name, request=request, player=request.primary_player)
 
         log.info(rules)
 

@@ -14,7 +14,7 @@ from Steward.models.automation.context import AutomationContext
 from Steward.models.automation.evaluators import evaluate_expression
 from Steward.models.automation.utils import eval_bool, eval_int
 from Steward.models.objects.enum import QueryResultType, RuleTrigger
-from Steward.models.views.request import BaseRequestReviewView
+from Steward.models.views.request import StaffRequestView
 from Steward.utils.dbUtils import execute_query
 from Steward.utils.discordUtils import chunk_text, get_webhook
 
@@ -354,7 +354,7 @@ class StewardRule:
                     
                 action_type = action.get('type')
 
-                # TODO: Assign Role, Remove Role, post application, 
+                # TODO: Assign Role, Remove Role
                 match action_type:
                     case'reward':
                         await self._reward(action, bot, context, results)
@@ -583,7 +583,15 @@ class StewardRule:
                 embed.set_footer(text=footer_text)
             
             if thumbnail := embed_data.get('thumbnail'):
+                thumbnail = self._evaluate_template(thumbnail, context)
                 embed.set_thumbnail(url=thumbnail)
+
+            if timestamp := embed_data.get('timestamp'):
+                try:
+                    timestamp = self._evaluate_template(timestamp, context)
+                    embed.timestamp = datetime.fromisoformat(timestamp)
+                except:
+                    pass
         
         if message_content or embed:
             await channel.send(content=message_content or None, embed=embed)
@@ -653,13 +661,19 @@ class StewardRule:
             results.append({'type': self.trigger.name, 'success': False, 'error': f'No channel available'})
             return
         try:
-            view = BaseRequestReviewView(bot, request=context.request)
-            await view.build_content()
+            if context.request.staff_message:
+                view = StaffRequestView(bot, request=context.request, action=action)
+                await context.request.staff_message.edit(view=view)
+            else:
+                message = await channel.send(content="Incoming request")
+                context.request.staff_message = message
+                context.request.staff_message_id = message.id
+                context.request.staff_channel_id = channel.id
+                await context.request.upsert()
 
-            message = await channel.send(view=view)
-            context.request.message_id = message.id
-            await context.request.upsert()
-            results.app ({'type': self.trigger.name, 'success': True})
+                view = StaffRequestView(bot, request=context.request, action=action)
+                await message.edit(view=view, content=None)
+            results.append({'type': self.trigger.name, 'success': True})
         except Exception as e:
             await context.request.delete()
         

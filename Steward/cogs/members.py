@@ -3,7 +3,8 @@ import discord
 from discord.ext import commands
 
 from Steward.bot import StewardBot, StewardContext
-from Steward.models.objects.exceptions import CharacterNotFound, StewardCommandError
+from Steward.models.modals.reward import RewardModal
+from Steward.models.objects.exceptions import CharacterNotFound, StewardError
 from Steward.models.views.player import PlayerInfoView
 from Steward.models.objects.player import Player
 from Steward.utils.discordUtils import is_admin, is_staff
@@ -30,6 +31,20 @@ class MemberCog(commands.Cog):
         ui = PlayerInfoView(self.bot, ctx, player, staff=True, admin=admin)
         await ctx.send(view=ui)
         await ctx.delete()
+
+    @commands.user_command(name="Reward")
+    @commands.check(is_staff)
+    async def user_reward(self, ctx: StewardContext, member: discord.Member):
+        if not ctx.server.activities:
+            raise StewardError("No activites are setup for reward. Contact an admin.")
+        
+        player = await Player.get_or_create(self.bot.db, member)
+
+        if not player.active_characters:
+            raise CharacterNotFound(player)
+        
+        modal = RewardModal(self.bot, player, ctx.server)
+        await ctx.send_modal(modal)
 
     @commands.user_command(name="Info")
     async def user_info(self, ctx: StewardContext, member: discord.Member):

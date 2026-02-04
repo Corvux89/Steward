@@ -14,40 +14,71 @@ class PromptModal(ui.DesignerModal):
             **kwargs
         ):
         """
-        Initialize a modal with a labeled input field.
+        Initialize a modal with a labeled input field or select menu.
         Args:
-            label (str): The label text to display above the input field.
-            current_value (str): The initial value to populate in the input field.
+            label (str): The label text to display above the input field or select.
+            current_value (str): The initial value to populate in the input field or select.
             title (str): The title of the modal dialog.
             **kwargs: Additional keyword arguments:
                 - placeholder (str, optional): Placeholder text for the input field. Defaults to label.
                 - length (int, optional): Maximum character length for the input. Defaults to 100.
                 - integer (bool, optional): Whether the input should be treated as an integer. Defaults to False.
+                - items (list, optional): List of items to display in a select menu. If provided, creates a Select instead of InputText.
+                - required (bool, optional): Whether the input should be required. Defaults to False.
         """
 
         placeholder = kwargs.get('placeholder', label)
         max_length = kwargs.get("length", 100)
         self.integer = kwargs.get("integer", False)
         required = kwargs.get("required", False)
+        items = kwargs.get("items")
 
-        super().__init__(
-            ui.Label(
-                label,
-                ui.InputText(
-                    placeholder=placeholder,
-                    max_length=max_length,
-                    value=str(current_value),
-                    custom_id="value",
-                    required=required
-                )
-            ),
-            title=title
-        )
+        if items:
+            # Create select menu from items
+            options = [
+                discord.SelectOption(label=str(item), value=str(item))
+                for item in items
+            ]
+            
+            super().__init__(
+                ui.Label(
+                    label,
+                    ui.Select(
+                        placeholder=placeholder,
+                        options=options,
+                        custom_id="value",
+                        required=required
+                    )
+                ),
+                title=title
+            )
+        else:
+            # Create text input
+            super().__init__(
+                ui.Label(
+                    label,
+                    ui.InputText(
+                        placeholder=placeholder,
+                        max_length=max_length,
+                        value=str(current_value),
+                        custom_id="value",
+                        required=required
+                    )
+                ),
+                title=title
+            )
 
     async def callback(self, interaction):
-        value = self.get_item("value").value
+        item = self.get_item("value")
+        if hasattr(item, 'values'):
+            # Select menu
+            value = item.values[0] if item.values else None
+        else:
+            # InputText
+            value = item.value
+            
         try:
-            if self.integer == True:
+            if self.integer == True and value:
                 self.value = int(value)
             else:
                 self.value = value
@@ -68,16 +99,17 @@ async def get_value_modal(
     Display a modal dialog to get a value from the user.
     Args:
         ctx (Union[discord.ApplicationContext, discord.Interaction]): The context or interaction object to send the modal through.
-        label (str): The label text to display in the modal input field.
-        current_value (str, optional): The pre-filled value in the input field. Defaults to "".
+        label (str): The label text to display in the modal input field or select.
+        current_value (str, optional): The pre-filled value in the input field or select. Defaults to "".
         title (str, optional): The title of the modal dialog. Defaults to "Input a value".
         **kwargs: Additional keyword arguments:
                 - placeholder (str, optional): Placeholder text for the input field. Defaults to label.
                 - length (int, optional): Maximum character length for the input. Defaults to 100.
                 - integer (bool, optional): Whether the input should be treated as an integer. Defaults to False.
+                - items (list, optional): List of items to display in a select menu. If provided, creates a Select instead of InputText.
                 - required (bool, optional): Whether the input should be required. Defaults to False
     Returns:
-        Union[int, str, None]: The value entered by the user. Returns an integer if 'integer' kwarg is True,
+        Union[int, str, None]: The value entered by the user or selected from the list. Returns an integer if 'integer' kwarg is True,
                                 otherwise returns a string. Returns None if no value was provided.
     Raises:
         ValueError: If 'integer' is True and the input cannot be converted to an integer.
@@ -93,7 +125,7 @@ async def get_value_modal(
     await modal.wait()
     value = getattr(modal, "value", None)
     
-    if integer:
+    if integer and value:
         return int(value)
     
     return value

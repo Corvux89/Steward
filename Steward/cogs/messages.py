@@ -4,10 +4,14 @@ from discord.ext import commands
 
 
 from Steward.bot import StewardBot, StewardContext
+from Steward.models.modals import get_value_modal
 from Steward.models.modals.messages import SayEditModal
 from Steward.models.objects.enum import WebhookType
 from Steward.models.objects.exceptions import StewardError
 from Steward.models.objects.webhook import StewardWebhook
+from Steward.models.objects.request import Request
+from Steward.models.views import confirm_view
+from Steward.utils.discordUtils import is_staff
 
 log = logging.getLogger(__name__)
 
@@ -62,7 +66,46 @@ class MessageCog(commands.Cog):
         ):
             await webhook.delete()
         
+        # Request
+        elif (
+            (request := await Request.fetch(self.bot, message.id))
+            and await is_staff(ctx) == True
+        ):
+            if await confirm_view(ctx, "Are you sure you want to cancel this request?") == True:
+                await request.delete()
+
         else:
             raise StewardError("This message cannot be deleted")
         
         await ctx.delete()
+
+    @commands.message_command(name="Approve")
+    @commands.check(is_staff)
+    async def message_approve(self, ctx: StewardContext, message: discord.Message):
+        # Request
+        if (
+            request := await Request.fetch(self.bot, message.id)
+        ):
+            act_list = [a.name for a in ctx.server.activities]
+            act = await get_value_modal(
+                ctx,
+                "Activity",
+                "",
+                "Select an activity",
+                items=act_list
+            )
+
+            activity = ctx.server.get_activity(act)
+
+            if activity:
+                await request.approve(self.bot, activity, ctx.author)
+            else:
+                raise StewardError("No activity specified")
+
+        else:
+            raise StewardError("What are you approving?")
+
+            
+
+
+            

@@ -77,7 +77,8 @@ class SafeNPC(SafeObject):
 class SafeLog(SafeObject):
     _allowed_attrs = {
         'id', 'author', 'player', 'event', 'activity', 'currency', 'xp', 'notes',
-        'invalid', 'character'
+        'invalid', 'character', 'original_xp', 'original_currency', 'epoch_time',
+        'created_ts'
     }
 
     _allowed_methods = set()
