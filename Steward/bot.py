@@ -66,17 +66,22 @@ class StewardBot(commands.Bot):
 
     async def on_ready(self):
         db_start = timer()
-        self.db = create_async_engine(DB_URL)
-        
-        async with self.db.begin() as conn:
-            await conn.run_sync(metadata.create_all)
+        try:
+            log.info("Connecting to database...")
+            self.db = create_async_engine(DB_URL)
 
-        db_end = timer()
-        log.info(f"Time to create db engine: {db_end - db_start:.2f}")
-        self.dispatch("db_connected")
+            async with self.db.begin() as conn:
+                await conn.run_sync(metadata.create_all)
 
-        log.info(f"Logged in as {self.user} (ID: {self.user.id})")
-        log.info("------")
+            db_end = timer()
+            log.info(f"Time to create db engine: {db_end - db_start:.2f}")
+            self.dispatch("db_connected")
+
+            log.info(f"Logged in as {self.user} (ID: {self.user.id})")
+            log.info("------")
+        except Exception:
+            log.exception("Failed during on_ready database setup")
+            raise
 
     async def close(self):
         log.info("Cleaning up and shutting down")
@@ -87,8 +92,9 @@ class StewardBot(commands.Bot):
 
     async def on_error(self, event_method, *args, **kwargs):
         exception = kwargs.get("exception")
-        if exception is not None:
-            await self.error_handling(event_method, exception)
+        if exception is None:
+            exception = traceback.format_exc()
+        log.error(f"Unhandled error in event '{event_method}': {exception}")
 
     async def on_command_error(self, context, exception):
         await self.error_handling(context, exception)

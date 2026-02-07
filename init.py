@@ -28,7 +28,7 @@ class MyHelpCommand(commands.MinimalHelpCommand):
 log_formatter = logging.Formatter("%(asctime)s %(name)s: %(message)s")
 handler = logging.StreamHandler(sys.stdout)
 logger = logging.getLogger()
-logger.setLevel(logging.ERROR if not DEBUG else logging.DEBUG)
+logger.setLevel(logging.INFO if not DEBUG else logging.DEBUG)
 logger.addHandler(handler)
 log = logging.getLogger("bot")
 
