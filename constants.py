@@ -1,5 +1,6 @@
 import json
 import os
+from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 
 DEBUG = os.environ.get('DEBUG', False)
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
@@ -10,7 +11,24 @@ ADMIN_GUILDS = (
     json.loads(os.environ["ADMIN_GUILDS"]) if "ADMIN_GUILDS" in os.environ else None
 )
 
-DB_URL = os.environ.get("DATABASE_URL", "")
+def normalize_database_url(url: str) -> str:
+    if not url:
+        return url
+
+    parsed = urlparse(url)
+    if parsed.scheme in {"postgres", "postgresql"}:
+        parsed = parsed._replace(scheme="postgresql+asyncpg")
+    elif parsed.scheme == "postgresql+asyncpg":
+        return url
+
+    query = dict(parse_qsl(parsed.query))
+    query.setdefault("sslmode", "require")
+    parsed = parsed._replace(query=urlencode(query))
+
+    return urlunparse(parsed)
+
+
+DB_URL = normalize_database_url(os.environ.get("DATABASE_URL", ""))
 
 # Symbols
 CHANNEL_BREAK = "```\n​ \n```"
