@@ -664,6 +664,10 @@ class StewardRule:
 
         for player in players:
             ctx = AutomationContext(player=player, server=context.server)
+
+            if not player.active_characters:
+                continue
+            
             if eval_bool(action.get('condition', ''), ctx) == True:
                 tasks.append(StewardLog.create(
                     bot,
