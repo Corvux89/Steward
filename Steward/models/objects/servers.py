@@ -106,7 +106,7 @@ class Server(discord.Guild):
 
             self.npcs = [NPC.NPCSchema(self._db).load(dict(row._mapping)) for row in rows]
 
-    async def load_acitvity_points(self) -> None:        
+    async def load_activity_points(self) -> None:        
         from Steward.models.objects.activityPoints import ActivityPoints
         query = (
             ActivityPoints.activity_points_table.select()
@@ -192,33 +192,33 @@ class Server(discord.Guild):
         rows = await execute_query(self._db, query, QueryResultType.multiple)
 
         if not rows:
-            # 5e Standard XP Ranges
+            # 5e Standard XP Ranges + tiers (1-4, 5-10, 11-16, 17-20)
             default = {
-                1: 0,
-                2: 300,
-                3: 900,
-                4: 2700,
-                5: 6500,
-                6: 14000,
-                7: 23000,
-                8: 34000,
-                9: 48000,
-                10: 64000,
-                11: 85000,
-                12: 100000,
-                13: 120000,
-                14: 140000,
-                15: 165000,
-                16: 195000,
-                17: 225000,
-                18: 265000,
-                19: 305000,
-                20: 335000
+                1: (0, 1),
+                2: (300, 1),
+                3: (900, 1),
+                4: (2700, 1),
+                5: (6500, 2),
+                6: (14000, 2),
+                7: (23000, 2),
+                8: (34000, 2),
+                9: (48000, 2),
+                10: (64000, 2),
+                11: (85000, 3),
+                12: (100000, 3),
+                13: (120000, 3),
+                14: (140000, 3),
+                15: (165000, 3),
+                16: (195000, 3),
+                17: (225000, 4),
+                18: (265000, 4),
+                19: (305000, 4),
+                20: (335000, 4)
             }
 
             upsert_tasks = [
-                Levels(self._db, self.id, lvl, xp).upsert() 
-                for lvl, xp in default.items()
+                Levels(self._db, self.id, lvl, xp, tier).upsert()
+                for lvl, (xp, tier) in default.items()
             ]
             results = await asyncio.gather(*upsert_tasks)
             self.levels = results
@@ -276,7 +276,7 @@ class Server(discord.Guild):
 
         server = cls(db, guild, **data)
         await server.load_npcs()
-        await server.load_acitvity_points()
+        await server.load_activity_points()
         await server.load_levels()
         await server.load_activities()
         

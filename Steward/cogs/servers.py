@@ -320,7 +320,7 @@ class ServerCog(commands.Cog):
 
                 ap = ActivityPoints(self.bot.db, **data)
                 await ap.upsert()
-            await server.load_acitvity_points()
+            await server.load_activity_points()
         else:
             schema = ActivityPoints.ActivityPointsSchema(self.bot.db)
             output = io.StringIO()
