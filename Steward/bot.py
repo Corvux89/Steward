@@ -81,12 +81,14 @@ class StewardBot(commands.Bot):
     async def close(self):
         log.info("Cleaning up and shutting down")
         if hasattr(self, "db"):
-            self.db.dispose()
+            await self.db.dispose()
 
         await super().close()
 
-    async def on_error(self, context, exception):
-        await self.error_handling(context, exception)
+    async def on_error(self, event_method, *args, **kwargs):
+        exception = kwargs.get("exception")
+        if exception is not None:
+            await self.error_handling(event_method, exception)
 
     async def on_command_error(self, context, exception):
         await self.error_handling(context, exception)
