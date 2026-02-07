@@ -133,8 +133,10 @@ class Requestview(BaseRequestView):
             if request:
                 view = PlayerRequestView(self.bot, request=request)
                 await view.build_content()
-                
-                await  self.message.edit(view=view)
+                try:
+                    await  self.message.edit(view=view)
+                except:
+                    pass
         else:
             if (
             not self._message
@@ -147,7 +149,11 @@ class Requestview(BaseRequestView):
 
             if message:
                 self.remove_all_buttons_and_action_rows()
-                await self.message.edit(view=self)
+
+                try:
+                    await self.message.edit(view=self)
+                except:
+                    pass
 
                 if self.delete_on_timeout:
                     await try_delete(message)

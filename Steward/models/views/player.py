@@ -45,7 +45,11 @@ class BaseInfoView(StewardView):
         if message:
             view = PlayerInfoView.from_menu(self)
             view.remove_all_buttons_and_action_rows()
-            await self.message.edit(view=view)
+
+            try:
+                await self.message.edit(view=view)
+            except:
+                pass
 
             if self.delete_on_timeout:
                 await try_delete(message)
