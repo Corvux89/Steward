@@ -22,7 +22,8 @@ def normalize_database_url(url: str) -> str:
         return url
 
     query = dict(parse_qsl(parsed.query))
-    query.setdefault("sslmode", "require")
+    query.pop("sslmode", None)
+    query.setdefault("ssl", "true")
     parsed = parsed._replace(query=urlencode(query))
 
     return urlunparse(parsed)
