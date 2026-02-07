@@ -52,9 +52,25 @@ class SafePlayer(SafeObject):
     """Safe wrapper for Player objects - read-only access"""
     _allowed_attrs = {
         'id', 'guild_id', 'campaign', 'primary_character', 'highest_level_character', 'mention', 'name', 'display_name', 
-        'avatar', 'staff_points', 'bot'
+        'avatar', 'staff_points', 'roles', 'active_characters'
     }
     _allowed_methods = set()
+
+    @property
+    def highest_level_character(self):
+        return SafeCharacter(getattr(self._obj, "highest_level_character"))
+    
+    @property
+    def primary_character(self):
+        return SafeCharacter(getattr(self._obj, "primary_character"))
+    
+    @property
+    def active_characters(self):
+        return [SafeCharacter(c) for c in getattr(self._obj, "active_characters")]
+
+    @property
+    def roles(self):
+        return [role.id for role in getattr(self._obj, 'roles', [])]
 
 
 class SafeServer(SafeObject):
@@ -82,6 +98,18 @@ class SafeLog(SafeObject):
     }
 
     _allowed_methods = set()
+
+    @property
+    def player(self):
+        return SafePlayer(getattr(self._obj, "player"))
+    
+    @property
+    def author(self):
+        return SafePlayer(getattr(self._obj, "author"))
+    
+    @property
+    def character(self):
+        return SafeCharacter(getattr(self._obj, "character"))
 
 
 def safe_getattr(obj, attr, default=''):
@@ -148,6 +176,7 @@ class StewardEvaluator(ast.NodeVisitor):
         self.config = config or StewardConfig()
         self.builtins = builtins or DEFAULT_BUILTINS.copy()
         self.statement_count = 0
+        self.loop_count = 0
         
         # Supported operators
         self.operators = {
@@ -204,10 +233,20 @@ class StewardEvaluator(ast.NodeVisitor):
                 f"Expression exceeded maximum statements ({self.config.max_statements})",
                 None, ""
             )
+
+    def _check_loop_limit(self):
+        """Check if we've exceeded the loop limit"""
+        self.loop_count += 1
+        if self.loop_count > self.config.max_loops:
+            raise LimitException(
+                f"Expression exceeded maximum loops ({self.config.max_loops})",
+                None, ""
+            )
     
     def eval(self, expr: str, names: Optional[Dict[str, Any]] = None) -> Any:
         names = names or {}
         self.statement_count = 0
+        self.loop_count = 0
         
         try:
             node = ast.parse(expr, mode='eval')
@@ -397,6 +436,57 @@ class StewardEvaluator(ast.NodeVisitor):
             return obj[key]
         except (KeyError, IndexError, TypeError) as e:
             raise StewardValueError(f"Subscript error: {e}", node, "")
+
+    def _assign_target(self, target, value, names: Dict[str, Any]):
+        if isinstance(target, ast.Name):
+            names[target.id] = value
+            return
+        if isinstance(target, (ast.Tuple, ast.List)):
+            if not isinstance(value, (list, tuple)):
+                raise InvalidExpression("Cannot unpack non-iterable in comprehension", target, "")
+            if len(target.elts) != len(value):
+                raise InvalidExpression("Unpack mismatch in comprehension", target, "")
+            for elt, item in zip(target.elts, value):
+                self._assign_target(elt, item, names)
+            return
+        raise InvalidExpression("Unsupported comprehension target", target, "")
+
+    def _eval_with_names(self, node, names: Dict[str, Any]):
+        original_names = self.names
+        self.names = names
+        try:
+            return self.visit(node)
+        finally:
+            self.names = original_names
+
+    def _eval_comprehension(self, generators, eval_elt, names: Dict[str, Any]):
+        if not generators:
+            yield eval_elt(names)
+            return
+
+        gen = generators[0]
+        iter_obj = self._eval_with_names(gen.iter, names)
+        for item in iter_obj:
+            self._check_loop_limit()
+            next_names = names.copy()
+            self._assign_target(gen.target, item, next_names)
+            if gen.ifs:
+                if not all(self._eval_with_names(test, next_names) for test in gen.ifs):
+                    continue
+            yield from self._eval_comprehension(generators[1:], eval_elt, next_names)
+
+    def visit_GeneratorExp(self, node):
+        self._check_statement_limit()
+        base_names = self.names.copy()
+
+        def eval_elt(local_names):
+            return self._eval_with_names(node.elt, local_names)
+
+        return self._eval_comprehension(node.generators, eval_elt, base_names)
+
+    def visit_ListComp(self, node):
+        self._check_statement_limit()
+        return list(self.visit_GeneratorExp(node))
     
     def generic_visit(self, node):
         raise InvalidExpression(

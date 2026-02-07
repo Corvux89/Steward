@@ -42,6 +42,7 @@ class RuleTrigger(StewardEnum):
     member_leave = "Member Leave"
     level_up = "Character Level Up"
     new_character = "New Character"
+    inactivate_character = "Inactivate Character"
     log = "Log Created"
     scheduled = "Scheduled"
     staff_point = "Staff Point"

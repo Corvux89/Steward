@@ -373,9 +373,12 @@ class ServerCog(commands.Cog):
     async def _activities_config(self, server: Server, csv_text: str = None):
         header_mapping = {
             "name": "Name",
+            "verb": "Verb",
             "currency_expr": "Currency Reward Expression",
             "xp_expr": "XP Reward Expression",
             "limited": "Limited/Capped?",
+            "allow_override": "Allow value overrides?",
+            "inverse_override": "Inverse override?",
             "active": "Active"
         }
 
@@ -389,6 +392,10 @@ class ServerCog(commands.Cog):
                     data['limited'] = data["limited"].lower() in ('true', '1', 'yes')
                 if 'active' in data:
                     data['active'] = data["active"].lower() in ('true', '1', 'yes')
+                if 'allow_override' in data:
+                    data['allow_override'] = data["allow_override"].lower() in ('true', '1', 'yes')
+                if 'inverse_override' in data:
+                    data['inverse_override'] = data["inverse_override"].lower() in ('true', '1', 'yes')
 
                 if not data.get('currency_expr'):
                     data['currency_expr'] = None

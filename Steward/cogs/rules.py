@@ -2,12 +2,10 @@ from datetime import datetime, timezone
 import logging
 import discord
 from discord.ext import commands, tasks
-from timeit import default_timer as timer
 
 
 from Steward.bot import StewardBot
 from Steward.models.automation.context import AutomationContext
-from Steward.models.objects import request
 from Steward.models.objects.form import Application
 from Steward.models.objects.character import Character
 from Steward.models.objects.enum import RuleTrigger
@@ -16,7 +14,6 @@ from Steward.models.objects.player import Player
 from Steward.models.objects.request import Request
 from Steward.models.objects.rules import StewardRule
 from Steward.models.objects.servers import Server
-from Steward.utils.discordUtils import is_staff
 from Steward.utils.ruleUtils import execute_rules_for_trigger
 
 log = logging.getLogger(__name__)
@@ -59,7 +56,24 @@ class RulesCog(commands.Cog):
        player = await Player.get_or_create(self.bot.db, server.get_member(character.player_id))
 
        rules = await execute_rules_for_trigger(self.bot, server, RuleTrigger.new_character.name, player=player, character=character, log=log_entry, ctx=ctx)
+       log.info(rules)
 
+    @commands.Cog.listener()
+    async def on_inactivate_character(self, ctx, character: Character, log_entry: StewardLog):
+       guild = self.bot.get_guild(character.guild_id)
+       server = await Server.get_or_create(self.bot.db, guild)
+       player = await Player.get_or_create(self.bot.db, server.get_member(character.player_id))
+
+       rules = await execute_rules_for_trigger(self.bot, server, RuleTrigger.inactivate_character.name, player=player, character=character, log=log_entry, ctx=ctx)
+       log.info(rules)
+
+    @commands.Cog.listener()
+    async def on_level_up(self, ctx, character: Character, log_entry: StewardLog):
+       guild = self.bot.get_guild(character.guild_id)
+       server = await Server.get_or_create(self.bot.db, guild)
+       player = await Player.get_or_create(self.bot.db, server.get_member(character.player_id))
+
+       rules = await execute_rules_for_trigger(self.bot, server, RuleTrigger.level_up.name, player=player, character=character, log=log_entry, ctx=ctx)
        log.info(rules)
        
     @commands.Cog.listener()

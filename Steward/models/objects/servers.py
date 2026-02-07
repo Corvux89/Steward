@@ -348,6 +348,51 @@ class Server(discord.Guild):
 
         return characters
     
+    async def get_all_players(self) -> list["Player"]:
+        from Steward.models.objects.player import Player
+        from Steward.models.objects.character import Character
+        players = []
+
+        query = (
+            Player.player_table.select()
+            .where(
+                Player.player_table.c.guild_id == self.id
+            )
+        )
+
+        rows = await execute_query(self._db, query, QueryResultType.multiple)
+        if not rows:
+            return players
+
+        members_by_id = {member.id: member for member in self.members}
+        player_data = [Player.PlayerSchema().load(dict(row._mapping)) for row in rows]
+        player_ids = [data["id"] for data in player_data]
+
+        characters_by_player = {player_id: [] for player_id in player_ids}
+        char_query = (
+            Character.characters_table.select()
+            .where(
+                sa.and_(
+                    Character.characters_table.c.guild_id == self.id,
+                    Character.characters_table.c.player_id.in_(player_ids)
+                )
+            )
+        )
+
+        char_rows = await execute_query(self._db, char_query, QueryResultType.multiple)
+        for row in char_rows:
+            character = Character.CharacterSchema(self._db).load(dict(row._mapping))
+            characters_by_player.setdefault(character.player_id, []).append(character)
+
+        for data in player_data:
+            member = members_by_id.get(data["id"]) or self.get_member(data["id"])
+            player = Player(self._db, member, **data)
+            player.characters = characters_by_player.get(data["id"], [])
+            players.append(player)
+
+        return players
+
+    
     def get_xp_for_level(self, level: int) -> int:
         for l in self.levels:
             if level == l.level:

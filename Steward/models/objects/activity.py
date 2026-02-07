@@ -16,9 +16,12 @@ class Activity:
         self.id = kwargs.get("id")
         self.guild_id = kwargs.get("guild_id")
         self.name = kwargs.get("name")
+        self.verb = kwargs.get("verb", "Complete")
 
         self.currency_expr = kwargs.get("currency_expr")
         self.xp_expr = kwargs.get("xp_expr")
+        self.allow_override = kwargs.get("allow_override", False)
+        self.inverse_override = kwargs.get("inverse_override", False)
         self.active = kwargs.get("active", True)
 
         self.limited: bool = kwargs.get("limited", False)
@@ -28,11 +31,14 @@ class Activity:
         metadata,
         sa.Column("id", sa.UUID, primary_key=True, default=uuid.uuid4),
         sa.Column("name", sa.String, nullable=False),
+        sa.Column("verb", sa.String, nullable=True),
         sa.Column("guild_id", sa.BigInteger, sa.ForeignKey("servers.id"), nullable=False),
         sa.Column("currency_expr", sa.String(500), nullable=True),
         sa.Column("xp_expr", sa.String(500), nullable=True),
         sa.Column("limited", sa.BOOLEAN, nullable=False, default=False),
         sa.Column("active", sa.Boolean, nullable=False, default=True),
+        sa.Column("allow_override", sa.Boolean, nullable=False, default=False),
+        sa.Column("inverse_override", sa.Boolean, nullable=False, default=False),
         sa.Index("idx_activity", "guild_id", "name")
     )
 
@@ -42,9 +48,12 @@ class Activity:
         id = fields.UUID(required=True)
         guild_id = fields.Integer(required=True)
         name = fields.String(required=True)
+        verb = fields.String(required=False, allow_none=True)
         currency_expr = fields.String(required=False, allow_none=True)
         xp_expr = fields.String(required=False, allow_none=True)
         limited = fields.Boolean(required=True)
+        allow_override = fields.Boolean(required=True)
+        inverse_override = fields.Boolean(required=True)
         active = fields.Boolean(required=True)
 
         def __init__(self, db: AsyncEngine, **kwargs):
@@ -59,9 +68,12 @@ class Activity:
     async def upsert(self) -> "Activity":
         update_dict = {
             "currency_expr": self.currency_expr,
+            "verb": self.verb,
             "xp_expr": self.xp_expr,
             "limited": self.limited,
-            "active": self.active
+            "active": self.active,
+            "allow_override": self.allow_override,
+            "inverse_override": self.inverse_override
         }
 
         insert_dict = {

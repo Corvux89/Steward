@@ -1,10 +1,8 @@
-import re
 import discord
 import logging
 
 from discord.ext import commands
 from Steward.bot import StewardBot, StewardContext
-from Steward.models.modals.reward import RewardModal
 from Steward.models.objects.request import Request
 from Steward.models.views import confirm_view
 from Steward.models.objects.form import Application, FormTemplate
@@ -12,6 +10,7 @@ from Steward.models.objects.exceptions import CharacterNotFound, StewardError
 from Steward.models.objects.character import Character
 from Steward.models.objects.player import Player
 from Steward.models.objects.webhook import StewardWebhook
+from Steward.models.views.log import CreateLogView
 from Steward.models.views.player import PlayerInfoView
 from Steward.models.views.request import PlayerRequestView, StaffRequestView, Requestview
 from Steward.utils.autocompleteUtils import form_autocomplete, character_autocomplete
@@ -86,7 +85,7 @@ class CharacterCog(commands.Cog):
         await ctx.delete()
 
     @character_admin_commands.command(
-            name="reward",
+            name="create_log",
             description="Give a player an activity reward"
     )
     async def player_reward(self,
@@ -105,9 +104,9 @@ class CharacterCog(commands.Cog):
         if not player.active_characters:
             raise CharacterNotFound(player)
 
-        modal = RewardModal(self.bot, player, ctx.server)
-        await ctx.send_modal(modal)       
-
+        ui = CreateLogView(ctx.author, self.bot, player, ctx.server)
+        await ctx.send(view=ui)
+        await ctx.delete()
 
     @commands.slash_command(
         name="info",

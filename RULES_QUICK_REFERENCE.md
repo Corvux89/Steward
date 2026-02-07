@@ -9,7 +9,7 @@ This document summarizes how rules, expressions, triggers, and actions work in S
 4. For scheduled rules, `last_run_ts` is updated after execution.
 
 ## Triggers
-- `member_join`, `member_leave`, `level_up`, `new_character`, `log`, `scheduled`
+- `member_join`, `member_leave`, `level_up`, `new_character`, `inactivate_character`, `log`, `scheduled`, `staff_point`, `new_request`, `new_application`
 
 ## Context Available in Expressions
 Expressions and templates can access the automation context:
@@ -19,6 +19,9 @@ Expressions and templates can access the automation context:
 - `log`: StewardLog object (may be None)
 - `ctx`: Discord interaction/command context (may be None)
 - `rule`: The current rule object
+- `npc`: NPC object (may be None)
+- `request`: Staff request object (may be None)
+- `application`: Application object (may be None)
 
 ## Condition Expressions (`condition_expr`)
 - Evaluated with `eval_bool`; must return truthy/falsey.
@@ -29,9 +32,11 @@ Expressions and templates can access the automation context:
 
 ## Template Expressions in Messages
 - Message content and embed fields support `{...}` expressions evaluated with the same context.
+- Format specs are supported: `{expr:format}` uses Python `format()`.
 - Examples:
   - `"Player: {player.mention if player else 'Unknown'}"`
   - `"XP: {log.xp if log else 0}"`
+  - `"Adjusted GP: {log.currency:,}"`
 
 ## Scheduling
 - `schedule_cron` supports standard 5-part cron: `minute hour day month day_of_week`.
@@ -50,19 +55,51 @@ Fields:
   - `title`, `description`, `color`
   - `fields`: list of `{name, value, inline}` (templates allowed)
   - `footer`, `thumbnail`
+  - `timestamp` (optional): ISO timestamp string
 
 ### `reward`
 - Uses StewardLog.create to reward currency/xp.
 - Fields: `activity`, `currency`, `xp`, `notes`.
 
-### `reset_all_limited_xp`
-- Sets `character.limited_xp = 0` for all server characters and upserts.
+### `reset_limited`
+- Resets limited values on all server characters and upserts.
+- Fields (all optional, default `true`):
+  - `xp`
+  - `currency`
+  - `activity_points`
 
-### `reset_all_limited_currency`
-- Sets `character.limited_currency = 0` for all server characters and upserts.
+### `staff_points`
+- Adds staff points to the target player.
+- Fields:
+  - `value` (expression or number)
 
-### `reset_activity_points`
-- Sets `character.activity_points = 0` for all server characters and upserts.
+### `bulk_reward`
+- Rewards all players that satisfy a condition expression.
+- Fields:
+  - `condition` (expression; if missing, defaults to falsey)
+  - `activity`, `currency`, `xp`, `notes`
+
+### `post_request`
+- Posts or updates a staff request view.
+- Fields:
+  - `channel_id` (optional): falls back to `ctx.channel` if omitted
+
+### `post_application`
+- Posts or updates an application summary via webhook.
+- Fields:
+  - `channel_id` (optional): falls back to `ctx.channel` if omitted
+
+### `assign_role`
+- Adds a role to the target player.
+- Fields:
+  - `role_id`
+  - `reason` (optional)
+
+### `remove_role`
+- Removes a role from the target player.
+- Fields:
+  - `role_id`
+  - `reason` (optional)
 
 ## Example: Message + Resets (scheduled hourly)
 ```json
@@ -78,9 +115,7 @@ Fields:
       "channel_id": 1465371354340524205,
       "content": "Reset done"
     },
-    {"type": "reset_all_limited_xp"},
-    {"type": "reset_all_limited_currency"},
-    {"type": "reset_activity_points"}
+    {"type": "reset_limited", "xp": true, "currency": true, "activity_points": true}
   ]
 }
 ```
@@ -117,6 +152,8 @@ A Discord member wrapper accessible in rule expressions.
 - **`display_name`** (`str`): Nickname or username.
 - **`avatar`**: Avatar object.
 - **`staff_points`** (`int`): Staff contribution counter.
+- **`active_characters`** (`list[Character]`): Active characters.
+- **`roles`** (`list[int]`): Role IDs for the member.
 
 ---
 
@@ -162,7 +199,7 @@ A guild wrapper with Steward configuration.
 ### Safe Methods (Available in Expressions)
 - **`get_xp_for_level(level)`** → `int`: Get XP required for a level.
 - **`get_level_for_xp(xp)`** → `int`: Get character level for given XP.
-- **`get_activity_for_points(points)`**: Get activity point threshold.
+- **`get_activity_for_points(points)`**: Get activity point threshold. Note: Server currently implements `get_activitypoint_for_points`.
 - **`max_characters(player)`** → `int | None`: Evaluate max character slot expression.
 - **`currency_limit(player, character)`** → `int | None`: Evaluate currency cap expression.
 - **`xp_limit(player, character)`** → `int | None`: Evaluate XP cap expression.
@@ -176,21 +213,19 @@ A transactional log entry; exposed in certain rule triggers.
 
 ### Safe Attributes (When Available)
 - **`id`** (`uuid.UUID`): Primary key.
-- **`author_id`** (`int`): Initiator user ID.
-- **`player_id`** (`int`): Affected player ID.
-- **`guild_id`** (`int`): Guild scope.
+- **`author`** (`Player`): Author as a safe player.
+- **`player`** (`Player`): Player as a safe player.
 - **`event`** (`LogEvent`): Event type.
-- **`character_id`** (`uuid.UUID | None`): Character affected (if any).
-- **`activity_id`** (`uuid.UUID | None`): Associated activity.
-- **`currency`** (`Decimal`): Currency delta.
+- **`activity`** (`Activity | None`): Associated activity.
+- **`currency`** (`Decimal | int`): Currency delta.
 - **`xp`** (`Decimal | int`): XP delta.
 - **`notes`** (`str | None`): Log notes.
 - **`invalid`** (`bool`): Invalidation flag.
+- **`character`** (`Character | None`): Character as a safe character.
+- **`original_xp`** (`Decimal | int | None`): Original XP before adjustment.
+- **`original_currency`** (`Decimal | int | None`): Original currency before adjustment.
+- **`epoch_time`** (`int | float | None`): Epoch timestamp.
 - **`created_ts`** (`datetime`): Creation timestamp (UTC).
-- **`server`** (`Server`): Resolved server object.
-- **`player`** (`Player`): Resolved player object.
-- **`author`** (`Player | discord.User`): Resolved author object.
-- **`character`** (`Character | None`): Resolved character object.
 
 ---
 

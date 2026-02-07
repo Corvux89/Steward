@@ -1,4 +1,0 @@
-"Name","Currency Reward Expression","XP Reward Expression","Limited/Capped?","Active"
-"Patrol","server.currency_limit(player,character)*0.2","server.xp_limit(player,character)*0.2",True,True
-"Quest","server.currency_limit(player,character)*2","server.xp_limit(player,character)*2",False,True
-"RP","server.currency_limit(player, character)*0.4","server.xp_limit(player, character)*0.4",True,True

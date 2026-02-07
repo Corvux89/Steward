@@ -87,6 +87,26 @@ class StewardRule:
     def _evaluate_template(self, template: str, context: AutomationContext) -> str:
         import logging
         log = logging.getLogger(__name__)
+
+        def split_format_spec(expr: str) -> tuple[str, str | None]:
+            depth = 0
+            in_single_quote = False
+            in_double_quote = False
+            for idx in range(len(expr) - 1, -1, -1):
+                char = expr[idx]
+                if char == "'" and not in_double_quote:
+                    in_single_quote = not in_single_quote
+                elif char == '"' and not in_single_quote:
+                    in_double_quote = not in_double_quote
+                elif in_single_quote or in_double_quote:
+                    continue
+                elif char in ")]}":
+                    depth += 1
+                elif char in "([{":
+                    depth -= 1
+                elif char == ":" and depth == 0:
+                    return expr[:idx], expr[idx + 1:]
+            return expr, None
         
         if not template:
             return ''
@@ -135,9 +155,15 @@ class StewardRule:
             log.debug(f"Found expression to evaluate: '{expr}'")
             
             try:
-                value = evaluate_expression(expr, context)
+                expr_value, format_spec = split_format_spec(expr)
+                value = evaluate_expression(expr_value, context)
                 log.debug(f"Expression '{expr}' evaluated to: {value}")
-                result.append(str(value) if value is not None else '')
+                if value is None:
+                    result.append('')
+                elif format_spec:
+                    result.append(format(value, format_spec))
+                else:
+                    result.append(str(value))
             except Exception as e:
                 log.warning(f"Failed to evaluate template expression '{expr}': {e}")
                 result.append(template[start:j])  
@@ -373,6 +399,15 @@ class StewardRule:
 
                     case "post_application":
                         await self._post_application(action, bot, context, results)
+
+                    case "bulk_reward":
+                        await self._bulk_reward(action, bot, context, results)
+
+                    case "assign_role":
+                        await self._assign_role(action, bot, context, results)
+
+                    case "remove_role":
+                        await self._assign_role(action, bot, context, results)
 
                         
             return {"success": True, "results": results}
@@ -617,6 +652,36 @@ class StewardRule:
 
         results.append({'type': self.trigger.name, 'success': True, 'count': len(characters)})
 
+    async def _bulk_reward(self, action: dict, bot: "StewardBot", context: "AutomationContext", results: []):
+        from .log import StewardLog
+        from .enum import LogEvent
+
+        players = await context.server.get_all_players()
+        tasks = []
+
+        if not players:
+            results.append({'type': self.trigger.name, 'success': False, 'error': 'No players found in the server'})
+
+        for player in players:
+            ctx = AutomationContext(player=player, server=context.server)
+            if eval_bool(action.get('condition', ''), ctx) == True:
+                tasks.append(StewardLog.create(
+                    bot,
+                    author=bot.user,
+                    player=player,
+                    character=player.primary_character,
+                    event=LogEvent.automation,
+                    activity=action.get('activity'),
+                    currency=action.get('currency', 0),
+                    xp=action.get('xp', 0),
+                    notes=f"Rule: {self.name}\n{action.get('notes')}"
+                ))
+            
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+        results.append({'type': self.trigger.name, 'success': True, 'count': len(tasks)})
+
     async def _staff_points(self, action: dict, bot: "StewardBot", context: "AutomationContext", results: []):
         if hasattr(context, "log") and context.log is not None:
             context.player = context.log.author
@@ -745,7 +810,50 @@ class StewardRule:
                 f"Need to make an edit? Use `/edit_application` in this thread."
             )
 
-        results.append({'type': self.trigger.name, 'success': True})    
+        results.append({'type': self.trigger.name, 'success': True})
+
+    async def _assign_role(self, action: dict, bot: "StewardBot", context: "AutomationContext", results: []):
+        role_id = action.get("role_id")
+        reason = action.get("reason", f"Automated role action per rule {self.name}")
+
+        if not hasattr(context, "server"):
+            results.append({'type': self.trigger.name, 'success': False, 'error': f'Server not found'})
+            return
+        else:
+            server = context.server
+
+        if role_id:
+            role = server.get_role(int(role_id))
+
+            if not role:
+                results.append({'type': self.trigger.name, 'success': False, 'error': f'Role {role_id} not found'})
+                return
+            
+        if role not in context.player.roles:
+            await context.player.add_roles(role, reason=reason)
+        results.append({'type': self.trigger.name, 'success': True})
+
+    async def _remove_role(self, action: dict, bot: "StewardBot", context: "AutomationContext", results: []):
+        role_id = action.get("role_id")
+        reason = action.get("reason", f"Automated role action per rule {self.name}")
+
+        if not hasattr(context, "server"):
+            results.append({'type': self.trigger.name, 'success': False, 'error': f'Server not found'})
+            return
+        else:
+            server = context.server
+
+        if role_id:
+            role = server.get_role(int(role_id))
+
+            if not role:
+                results.append({'type': self.trigger.name, 'success': False, 'error': f'Role {role_id} not found'})
+                return
+            
+        if role in context.player.roles:
+            await context.player.remove_roles(role, reason=reason)
+        results.append({'type': self.trigger.name, 'success': True})
+
 
         
     

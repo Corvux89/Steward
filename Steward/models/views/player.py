@@ -179,7 +179,7 @@ class CharacterInfoView(BaseInfoView):
         
         if self.character.player_id == self.ctx.author.id:
             edit_nickname_button = ui.Button(
-                style=discord.ButtonStyle.blurple,
+                style=discord.ButtonStyle.secondary,
                 emoji=EDIT_EMOJI[0],
                 custom_id="edit_character_nickname",
             )
@@ -195,7 +195,7 @@ class CharacterInfoView(BaseInfoView):
     
         if self.staff:
             edit_currency_button = ui.Button(
-                style=discord.ButtonStyle.blurple,
+                style=discord.ButtonStyle.secondary,
                 emoji=EDIT_EMOJI[0],
                 custom_id="edit_character_currency"
             )
@@ -203,6 +203,21 @@ class CharacterInfoView(BaseInfoView):
             container.add_item(ui.Section(currency_display, accessory=edit_currency_button))
         else:
             container.add_item(currency_display)
+
+        limited_currency_display = ui.TextDisplay(
+            f"**Limited {self.ctx.server.currency_str}**: {self.character.limited_currency}"
+        )
+
+        if self.staff:
+            edit_limited_currency_button = ui.Button(
+                style=discord.ButtonStyle.secondary,
+                emoji=EDIT_EMOJI[0],
+                custom_id="edit_character_limited_currency"
+            )
+            edit_limited_currency_button.callback = self._on_edit_character_limited_currency
+            container.add_item(ui.Section(limited_currency_display, accessory=edit_limited_currency_button))
+        else:
+            container.add_item(limited_currency_display)
     
     def _add_xp_section(self, container: ui.Container):
         xp_level = self.ctx.server.get_level_for_xp(self.character.xp)
@@ -212,7 +227,7 @@ class CharacterInfoView(BaseInfoView):
         
         if self.staff:
             edit_xp_button = ui.Button(
-                style=discord.ButtonStyle.blurple,
+                style=discord.ButtonStyle.secondary,
                 emoji=EDIT_EMOJI[0],
                 custom_id="edit_character_xp"
             )
@@ -220,6 +235,21 @@ class CharacterInfoView(BaseInfoView):
             container.add_item(ui.Section(xp_display, accessory=edit_xp_button))
         else:
             container.add_item(xp_display)
+
+        limited_xp_display = ui.TextDisplay(
+            f"**Limited XP**: {self.character.limited_xp}"
+        )
+
+        if self.staff:
+            edit_limited_xp_button = ui.Button(
+                style=discord.ButtonStyle.secondary,
+                emoji=EDIT_EMOJI[0],
+                custom_id="edit_character_limited_xp"
+            )
+            edit_limited_xp_button.callback = self._on_edit_character_limited_xp
+            container.add_item(ui.Section(limited_xp_display, accessory=edit_limited_xp_button))
+        else:
+            container.add_item(limited_xp_display)
     
     def _add_activity_section(self, container: ui.Container):
         if self.ctx.server.activity_points:
@@ -231,7 +261,7 @@ class CharacterInfoView(BaseInfoView):
 
             if self.admin:
                 edit_ap_button = ui.Button(
-                    style=discord.ButtonStyle.blurple,
+                    style=discord.ButtonStyle.secondary,
                     emoji=EDIT_EMOJI[0],
                     custom_id="edit_character_ap"
                 )
@@ -373,6 +403,32 @@ class CharacterInfoView(BaseInfoView):
 
         await self.refresh_content(interaction)
 
+    async def _on_edit_character_limited_currency(self, interaction: discord.Interaction):
+        old_limited_currency = self.character.limited_currency
+        new_limited_currency = await get_value_modal(
+            interaction,
+            f"Limited {self.ctx.server.currency_str}",
+            str(old_limited_currency),
+            f"Character limited {self.ctx.server.currency_str}",
+            integer=True,
+            length=100
+        )
+
+        if new_limited_currency is not None and old_limited_currency != new_limited_currency:
+            difference = new_limited_currency - old_limited_currency
+            self.character.limited_currency = new_limited_currency
+
+            await StewardLog.create(
+                self.bot,
+                self.ctx.author,
+                self.player,
+                LogEvent.edit_character,
+                character=self.character,
+                notes=f"Limited Currency Update: `{old_limited_currency}` -> `{new_limited_currency}` ({difference})"
+            )
+
+        await self.refresh_content(interaction)
+
     async def _on_edit_character_xp(self, interaction: discord.Interaction):
         old_xp = self.character.xp
         new_xp = await get_value_modal(
@@ -395,6 +451,32 @@ class CharacterInfoView(BaseInfoView):
                 character=self.character,
                 xp=difference,
                 notes=f"XP Update: `{old_xp}` -> `{new_xp}` ({difference})"
+            )
+
+        await self.refresh_content(interaction)
+
+    async def _on_edit_character_limited_xp(self, interaction: discord.Interaction):
+        old_limited_xp = self.character.limited_xp
+        new_limited_xp = await get_value_modal(
+            interaction,
+            "Limited XP",
+            str(old_limited_xp),
+            "Character Limited XP",
+            integer=True,
+            length=10
+        )
+
+        if new_limited_xp is not None and old_limited_xp != new_limited_xp:
+            difference = new_limited_xp - old_limited_xp
+            self.character.limited_xp = new_limited_xp
+
+            await StewardLog.create(
+                self.bot,
+                self.ctx.author,
+                self.player,
+                LogEvent.edit_character,
+                character=self.character,
+                notes=f"Limited XP Update: `{old_limited_xp}` -> `{new_limited_xp}` ({difference})"
             )
 
         await self.refresh_content(interaction)
@@ -453,7 +535,7 @@ class CharacterInfoView(BaseInfoView):
             
         self.character.level += 1
 
-        await StewardLog.create(
+        log = await StewardLog.create(
             self.bot,
             self.ctx.author,
             self.player,
@@ -461,6 +543,8 @@ class CharacterInfoView(BaseInfoView):
             character=self.character,
             notes=notes
         )
+
+        await self.bot.dispatch(RuleTrigger.level_up.name, interaction, self.character, log)
 
         await self.refresh_content(interaction)
 
@@ -472,7 +556,7 @@ class CharacterInfoView(BaseInfoView):
         ):
             self.character.active = False
 
-            await StewardLog.create(
+            log = await StewardLog.create(
                 self.bot,
                 self.ctx.author,
                 self.player,
@@ -483,6 +567,9 @@ class CharacterInfoView(BaseInfoView):
 
             # Refresh player
             self.player = await Player.get_or_create(self.bot.db, self.player)
+
+            self.bot.dispatch(RuleTrigger.inactivate_character.name, interaction, self.character, log)
+            self.character = None
 
         await self.defer_to(PlayerInfoView, interaction)
         
@@ -661,7 +748,7 @@ class NewCharacterView(BaseInfoView):
     async def _on_create_button(self, interaction: discord.Interaction):
         if self.application_type != ApplicationType.new:
             self.reroll_character.active = False
-            await StewardLog.create(
+            reroll_log = await StewardLog.create(
                 self.ctx.bot,
                 self.ctx.author,
                 self.player,
@@ -669,6 +756,7 @@ class NewCharacterView(BaseInfoView):
                 character=self.reroll_character,
                 notes=f"str(self.application_type.value) -> Inactivating Character"
             )
+            await self.bot.dispatch(RuleTrigger.inactivate_character.name, interaction, self.reroll_character, reroll_log)
 
         new_log = await StewardLog.create(
             self.ctx.bot,
