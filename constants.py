@@ -16,7 +16,8 @@ def normalize_database_url(url: str) -> str:
         return url
 
     parsed = urlparse(url)
-    if parsed.scheme in {"postgres", "postgresql"}:
+    is_plain_postgres = parsed.scheme in {"postgres", "postgresql"}
+    if is_plain_postgres:
         parsed = parsed._replace(scheme="postgresql+asyncpg")
 
     query = dict(parse_qsl(parsed.query))
@@ -26,7 +27,7 @@ def normalize_database_url(url: str) -> str:
             query["ssl"] = "false"
         elif sslmode is not None:
             query["ssl"] = "true"
-        else:
+        elif is_plain_postgres:
             query.setdefault("ssl", "true")
 
     parsed = parsed._replace(query=urlencode(query))
