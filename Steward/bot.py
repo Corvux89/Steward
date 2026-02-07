@@ -118,9 +118,9 @@ class StewardBot(commands.Bot):
             raise StewardCommandError(f"Try again in a few seconds. I'm not fully ready yet.")
 
         ctx: StewardContext = ctx
-
-        ctx.player = await Player.get_or_create(self.db, ctx.author)
+        
         ctx.server = await Server.get_or_create(self.db, ctx.guild)
+        ctx.player = await Player.get_or_create(self.db, ctx.author)
 
         # Statistics
         await ctx.player.update_command_count(str(ctx.command))
