@@ -18,12 +18,17 @@ def normalize_database_url(url: str) -> str:
     parsed = urlparse(url)
     if parsed.scheme in {"postgres", "postgresql"}:
         parsed = parsed._replace(scheme="postgresql+asyncpg")
-    elif parsed.scheme == "postgresql+asyncpg":
-        return url
 
     query = dict(parse_qsl(parsed.query))
-    query.pop("sslmode", None)
-    query.setdefault("ssl", "true")
+    sslmode = query.pop("sslmode", None)
+    if "ssl" not in query:
+        if sslmode in {"disable"}:
+            query["ssl"] = "false"
+        elif sslmode is not None:
+            query["ssl"] = "true"
+        else:
+            query.setdefault("ssl", "true")
+
     parsed = parsed._replace(query=urlencode(query))
 
     return urlunparse(parsed)
