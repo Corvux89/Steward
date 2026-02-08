@@ -59,6 +59,11 @@ class CharacterCog(commands.Cog):
         if (request := await Request.fetch(self.bot, message.id)):
             await request.delete()
 
+    @commands.Cog.listener()
+    async def on_thread_delete(self, thread: discord.Thread):
+        if (application := await Application.fetch_by_message_id(self.bot.db, thread.guild.id, thread.id)):
+            await application.delete()
+
     @commands.command(name="say", contexts=[discord.InteractionContextType.guild])
     @commands.check(dm_check)
     async def character_say(self, ctx: StewardContext):
