@@ -131,7 +131,7 @@ class RulesCog(commands.Cog):
                 log.debug("No scheduled rules found")
                 return
             
-            log.info(f"Found {len(scheduled_rules)} scheduled rules to check")
+            log.debug(f"Found {len(scheduled_rules)} scheduled rules to check")
             
             for rule in scheduled_rules:
                 try:

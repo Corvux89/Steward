@@ -64,7 +64,7 @@ class CharacterCog(commands.Cog):
         if (application := await Application.fetch_by_message_id(self.bot.db, thread.guild.id, thread.id)):
             await application.delete()
 
-    @commands.command(name="say", contexts=[discord.InteractionContextType.guild])
+    @commands.command(name="say", contexts=[discord.InteractionContextType.guild], aliases=['s'])
     @commands.check(dm_check)
     async def character_say(self, ctx: StewardContext):
         await StewardWebhook(ctx).send()

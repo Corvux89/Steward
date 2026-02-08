@@ -499,7 +499,7 @@ class ServerCog(commands.Cog):
                     if k == 'action_data':
                         row[v] = json.dumps(data.get(k, {}))
                     elif k == 'trigger':
-                        row[v] = k.name
+                        row[v] = rule.trigger.name
                     else:
                         row[v] = data.get(k)
                 writer.writerow(row)
