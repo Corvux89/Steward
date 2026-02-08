@@ -844,7 +844,109 @@ class StewardRule:
             )
 
             if len(chunks) > 1:
-                log.info("too many chunks")
+                try:
+                    message = await channel.fetch_message(application.message_id)
+                    thread = message.thread
+                    if thread is None:
+                        return
+                    else:
+                        try:
+                            await thread.edit(archived=False)
+                        except Exception:
+                            pass
+
+                    overflow_chunks = chunks[1:]
+                    hint_text = "Need to make an edit? Use `/edit_application` in this thread."
+
+                    try:
+                        webhook_messages = []
+                        hint_message = None
+                        async for msg in thread.history(limit=None, oldest_first=True):
+                            is_bot = bot.user and msg.author == bot.user
+                            is_webhook = msg.webhook_id is not None
+                            is_staff_copy = msg.content.startswith("`Message from ") if msg.content else False
+                            if is_webhook:
+                                webhook_messages.append(msg)
+                            elif is_bot and not is_staff_copy and msg.content == hint_text:
+                                hint_message = msg
+
+                        if len(webhook_messages) >= len(overflow_chunks):
+                            for extra in webhook_messages[len(overflow_chunks):]:
+                                try:
+                                    await extra.delete()
+                                except Exception:
+                                    pass
+
+                            for index, chunk in enumerate(overflow_chunks):
+                                webhook_message = webhook_messages[index]
+                                if webhook_message:
+                                    await webhook.edit_message(webhook_message.id, content=chunk)
+
+                            if hint_message:
+                                await hint_message.edit(content=hint_text)
+                            else:
+                                await thread.send(hint_text)
+                        else:
+                            raise ValueError("webhook message count mismatch")
+                    except Exception as e:
+                        # Nuclear option
+                        staff_messages = []
+                        human_staff_messages = []
+                        bot_staff_copies = []
+                        try:
+                            async for msg in thread.history(limit=None, oldest_first=True):
+                                is_bot = bot.user and msg.author == bot.user
+                                is_webhook = msg.webhook_id is not None
+                                is_staff_copy = msg.content.startswith("`Message from ") if msg.content else False
+                                if not is_webhook:
+                                    if is_bot and is_staff_copy:
+                                        bot_staff_copies.append(msg)
+                                    elif not is_bot:
+                                        human_staff_messages.append(msg)
+                                try:
+                                    await msg.delete()
+                                except Exception:
+                                    pass
+                        except Exception:
+                            pass
+
+                        staff_messages = human_staff_messages or bot_staff_copies
+
+                        sender_name = application.player.display_name if application.template.character_specific == False else application.character.name
+                        sender_avatar = (
+                            application.player.avatar.url if application.player.avatar else None
+                            if application.template.character_specific == False
+                            else application.character.avatar_url
+                        )
+
+                        for chunk in overflow_chunks:
+                            await webhook.send(
+                                chunk,
+                                thread=thread,
+                                username=sender_name,
+                                avatar_url=sender_avatar
+                            )
+
+                        await thread.send(hint_text)
+
+                        for msg in staff_messages:
+                            content = msg.content or ""
+                            attachments = [att.url for att in msg.attachments]
+                            if attachments:
+                                content = (content + "\n" if content else "") + "Attachments:\n" + "\n".join(attachments)
+
+                            is_bot = bot.user and msg.author == bot.user
+                            is_staff_copy = msg.content.startswith("`Message from ") if msg.content else False
+                            if is_bot and is_staff_copy:
+                                await thread.send(content or "`Message from unknown`:")
+                            else:
+                                timestamp = f"<t:{int(msg.created_at.timestamp())}:F>" if msg.created_at else ""
+                                header = f"`Message from {msg.author.display_name}`"
+                                if timestamp:
+                                    header += f" ({timestamp})"
+                                await thread.send(f"{header}:\n{content}" if content else f"{header}:")
+                except Exception as e:
+                    log.info(f"unable to update application thread: {e}")
         else:
             for i, chunk in enumerate(chunks):
                 if i == 0:
@@ -870,7 +972,16 @@ class StewardRule:
                         auto_archive_duration=10080
                     )
                 else:
-                    await thread.send(chunk)
+                    await webhook.send(
+                        chunk,
+                        thread=thread,
+                        username=application.player.display_name if application.template.character_specific == False else application.character.name,
+                        avatar_url=(
+                            application.player.avatar.url if application.player.avatar else None
+                            if application.template.character_specific == False
+                            else application.character.avatar_url
+                        )
+                    )
 
             await thread.send(
                 f"Need to make an edit? Use `/edit_application` in this thread."

@@ -2,6 +2,16 @@ from typing import Optional, Union
 import discord
 import discord.ui as ui
 
+
+def _extract_modal_value(interaction, custom_id: str) -> Optional[str]:
+    data = getattr(interaction, "data", None) or {}
+    components = data.get("components") or []
+    for row in components:
+        for component in row.get("components", []):
+            if component.get("custom_id") == custom_id:
+                return component.get("value")
+    return None
+
 class PromptModal(ui.DesignerModal):
     value: Union[str, int] = None
     integer: bool = False
@@ -54,16 +64,24 @@ class PromptModal(ui.DesignerModal):
             )
         else:
             # Create text input
+            safe_max_length = min(max_length, 4000)
+            safe_placeholder = str(placeholder).replace("\r", " ").replace("\n", " ")
+            input_kwargs = {
+                "placeholder": safe_placeholder,
+                "max_length": safe_max_length,
+                "custom_id": "value",
+                "required": required,
+            }
+
+            if current_value is not None:
+                safe_value = str(current_value).replace("\r", " ").replace("\n", " ")
+                if safe_value:
+                    input_kwargs["value"] = safe_value[:safe_max_length]
+
             super().__init__(
                 ui.Label(
                     label,
-                    ui.InputText(
-                        placeholder=placeholder,
-                        max_length=max_length,
-                        value=str(current_value),
-                        custom_id="value",
-                        required=required
-                    )
+                    ui.InputText(**input_kwargs)
                 ),
                 title=title
             )
@@ -76,6 +94,8 @@ class PromptModal(ui.DesignerModal):
         else:
             # InputText
             value = item.value
+            if value is None:
+                value = _extract_modal_value(interaction, "value")
             
         try:
             if self.integer == True and value:
@@ -228,25 +248,36 @@ class DynamicFieldModal(ui.DesignerModal):
 
         content = []
 
-        # Description
-        if description:
-            content.append(
-                ui.TextDisplay(description)
-            )
-
         # Input field
         text_style = discord.InputTextStyle.long if style == 'long' else discord.InputTextStyle.short
+        safe_max_length = max(1, min(int(max_length), 4000))
+        safe_value = None if current_value is None else str(current_value)
+        safe_label = str(label)[:45]
+        placeholder_base = placeholder or label
+        if not placeholder_base and description:
+            placeholder_base = description
+        safe_placeholder = str(placeholder_base)
+        safe_value = safe_value
+        if text_style == discord.InputTextStyle.short:
+            safe_placeholder = safe_placeholder.replace("\r", " ").replace("\n", " ")
+            if safe_value is not None:
+                safe_value = safe_value.replace("\r", " ").replace("\n", " ")
+        safe_placeholder = safe_placeholder[:100]
+        input_kwargs = {
+            "placeholder": safe_placeholder,
+            "max_length": safe_max_length,
+            "custom_id": "field_value",
+            "required": required,
+            "style": text_style,
+        }
+
+        if safe_value:
+            input_kwargs["value"] = safe_value[:safe_max_length]
+
         content.append(
             ui.Label(
-                label,
-                ui.InputText(
-                    placeholder=placeholder or label,
-                    max_length=max_length,
-                    value=str(current_value) if current_value else "",
-                    custom_id="field_value",
-                    required=required,
-                    style=text_style
-                )
+                safe_label,
+                ui.InputText(**input_kwargs)
             )
         )
 
@@ -256,8 +287,15 @@ class DynamicFieldModal(ui.DesignerModal):
         )
 
     async def callback(self, interaction):
-        self.value = self.get_item("field_value").value
-        await interaction.response.defer()
+        item = self.get_item("field_value")
+        value = getattr(item, "value", None)
+        if value is None:
+            value = _extract_modal_value(interaction, "field_value")
+        self.value = value
+        try:
+            await interaction.response.defer()
+        except:
+            pass
         self.stop()
 
 
