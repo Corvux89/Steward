@@ -469,7 +469,7 @@ class StewardRule:
                         await self._assign_role(action, bot, context, results)
 
                     case "remove_role":
-                        await self._assign_role(action, bot, context, results)
+                        await self._remove_role(action, bot, context, results)
 
                         
             return {"success": True, "results": results}

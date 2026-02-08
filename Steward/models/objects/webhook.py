@@ -49,7 +49,7 @@ class StewardWebhook:
 
         match self.type:
             case WebhookType.character:
-                self.content = self.message.content[5:]
+                self.content = self.message.content[len(self.ctx.invoked_with)+2:]
 
                 if self.content == "" or self.content.lower() == f"{self.ctx.bot.command_prefix}say":
                     return
