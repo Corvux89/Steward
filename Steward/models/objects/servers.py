@@ -434,7 +434,7 @@ class Server(discord.Guild):
         try:
             return int(evaluate_expression(self.max_characters_expr, context))
         except:
-            return None
+            return 1
             
     
     def currency_limit(self, player: "Player", character: "Character") -> int:

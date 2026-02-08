@@ -89,14 +89,14 @@ class PlayerInfoView(BaseInfoView):
             player_button.callback = self._on_player_info
             row_1_buttons.append(player_button)
 
-            if not self.player.active_characters or len(self.player.active_characters) < self.ctx.server.max_characters(self.player):
-                new_character_button = ui.Button(
-                    label="New Character",
-                    style=discord.ButtonStyle.green,
-                    custom_id="new_character"
-                )
-                new_character_button.callback = self._on_new_character_button
-                row_1_buttons.append(new_character_button)
+            
+            new_character_button = ui.Button(
+                label="New Character",
+                style=discord.ButtonStyle.green,
+                custom_id="new_character"
+            )
+            new_character_button.callback = self._on_new_character_button
+            row_1_buttons.append(new_character_button)
 
             exit_button = ui.Button(
                 label="Quit",
@@ -642,25 +642,30 @@ class NewCharacterView(BaseInfoView):
         for type in ApplicationType:
             match type:
                 case ApplicationType.new:
+                    default = True if not self.player.active_characters or self.application_type and self.application_type == type else False
                     if len(self.player.active_characters) == 0 or len(self.player.active_characters) < self.ctx.server.max_characters(self.player):
                         options.append(
                             discord.SelectOption(
                                 label=type.value,
                                 value=type.name,
-                                default=True if not self.player.active_characters or self.application_type and self.application_type == type else False
+                                default=True
                             )
                         )
+
+                        if default:
+                            self.application_type = ApplicationType.new
                 case ApplicationType.level:
                     pass
 
                 case _:
-                    options.append(
-                        discord.SelectOption(
-                            label=type.value,
-                            value=type.name,
-                            default=True if self.application_type and self.application_type == type else False
+                    if self.player.active_characters:
+                        options.append(
+                            discord.SelectOption(
+                                label=type.value,
+                                value=type.name,
+                                default=True if self.application_type and self.application_type == type else False
+                            )
                         )
-                    )
         reroll_select = ui.Select(
             placeholder="Character Creation Type",
             custom_id="application_type",

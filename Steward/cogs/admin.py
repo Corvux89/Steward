@@ -45,6 +45,7 @@ class AdminCog(commands.Cog):
             "author": ctx.author,
             "guild": ctx.guild,
             "message": ctx.message,
+            "server": ctx.server,
         }
 
         def _cleanup_code(content):
