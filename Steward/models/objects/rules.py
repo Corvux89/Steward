@@ -329,6 +329,24 @@ class StewardRule:
     
     def _cron_matches(self, expression: str, value: int, min_val: int, max_val: int) -> bool:
         """Check if a value matches a cron expression component"""
+        day_map = {
+            "mon": 0,
+            "tue": 1,
+            "wed": 2,
+            "thu": 3,
+            "fri": 4,
+            "sat": 5,
+            "sun": 6,
+        }
+
+        def normalize_token(token: str) -> str:
+            lowered = token.strip().lower()
+            if lowered.isdigit():
+                return lowered
+            if lowered in day_map:
+                return str(day_map[lowered])
+            raise ValueError(f"Invalid cron token: {token}")
+
         if expression == '*':
             return True
         
@@ -336,27 +354,50 @@ class StewardRule:
         if '/' in expression:
             parts = expression.split('/')
             if parts[0] == '*':
-                step = int(parts[1])
-                return value % step == 0
+                try:
+                    step = int(parts[1])
+                    return value % step == 0
+                except ValueError:
+                    return False
             else:
                 # Range with step (1-10/2)
-                range_part, step = parts[0], int(parts[1])
+                range_part = parts[0]
+                try:
+                    step = int(parts[1])
+                except ValueError:
+                    return False
                 if '-' in range_part:
-                    start, end = map(int, range_part.split('-'))
+                    try:
+                        start_token, end_token = range_part.split('-')
+                        start = int(normalize_token(start_token))
+                        end = int(normalize_token(end_token))
+                    except ValueError:
+                        return False
                     return start <= value <= end and (value - start) % step == 0
         
         # Handle ranges (1-5)
         if '-' in expression:
-            start, end = map(int, expression.split('-'))
+            try:
+                start_token, end_token = expression.split('-')
+                start = int(normalize_token(start_token))
+                end = int(normalize_token(end_token))
+            except ValueError:
+                return False
             return start <= value <= end
         
         # Handle lists (1,3,5)
         if ',' in expression:
-            values = [int(v) for v in expression.split(',')]
+            try:
+                values = [int(normalize_token(v)) for v in expression.split(',')]
+            except ValueError:
+                return False
             return value in values
         
         # Exact match
-        return int(expression) == value
+        try:
+            return int(normalize_token(expression)) == value
+        except ValueError:
+            return False
 
     async def mark_as_run(self, run_time: Optional[datetime] = None) -> None:
         """Update the last_run_ts field after executing a scheduled rule"""
