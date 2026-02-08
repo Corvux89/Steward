@@ -282,7 +282,7 @@ class StewardRule:
             current_hour = current_time.hour
             current_day = current_time.day
             current_month = current_time.month
-            current_dow = current_time.weekday()  # Monday=0, Sunday=6
+            current_dow = (current_time.weekday() + 1) % 7  # Cron DOW: Sunday=0, Saturday=6
             
             # Check each component
             if not self._cron_matches(minute_expr, current_minute, 0, 59):
@@ -330,21 +330,42 @@ class StewardRule:
     def _cron_matches(self, expression: str, value: int, min_val: int, max_val: int) -> bool:
         """Check if a value matches a cron expression component"""
         day_map = {
-            "mon": 0,
-            "tue": 1,
-            "wed": 2,
-            "thu": 3,
-            "fri": 4,
-            "sat": 5,
-            "sun": 6,
+            "sun": 0,
+            "mon": 1,
+            "tue": 2,
+            "wed": 3,
+            "thu": 4,
+            "fri": 5,
+            "sat": 6,
         }
+        month_map = {
+            "jan": 1,
+            "feb": 2,
+            "mar": 3,
+            "apr": 4,
+            "may": 5,
+            "jun": 6,
+            "jul": 7,
+            "aug": 8,
+            "sep": 9,
+            "oct": 10,
+            "nov": 11,
+            "dec": 12,
+        }
+        is_dow = min_val == 0 and max_val == 6
+        is_month = min_val == 1 and max_val == 12
 
-        def normalize_token(token: str) -> str:
+        def normalize_token(token: str) -> int:
             lowered = token.strip().lower()
             if lowered.isdigit():
-                return lowered
-            if lowered in day_map:
-                return str(day_map[lowered])
+                numeric = int(lowered)
+                if is_dow and numeric == 7:
+                    numeric = 0
+                return numeric
+            if is_dow and lowered in day_map:
+                return day_map[lowered]
+            if is_month and lowered in month_map:
+                return month_map[lowered]
             raise ValueError(f"Invalid cron token: {token}")
 
         if expression == '*':
@@ -369,8 +390,8 @@ class StewardRule:
                 if '-' in range_part:
                     try:
                         start_token, end_token = range_part.split('-')
-                        start = int(normalize_token(start_token))
-                        end = int(normalize_token(end_token))
+                        start = normalize_token(start_token)
+                        end = normalize_token(end_token)
                     except ValueError:
                         return False
                     return start <= value <= end and (value - start) % step == 0
@@ -379,8 +400,8 @@ class StewardRule:
         if '-' in expression:
             try:
                 start_token, end_token = expression.split('-')
-                start = int(normalize_token(start_token))
-                end = int(normalize_token(end_token))
+                start = normalize_token(start_token)
+                end = normalize_token(end_token)
             except ValueError:
                 return False
             return start <= value <= end
@@ -388,14 +409,14 @@ class StewardRule:
         # Handle lists (1,3,5)
         if ',' in expression:
             try:
-                values = [int(normalize_token(v)) for v in expression.split(',')]
+                values = [normalize_token(v) for v in expression.split(',')]
             except ValueError:
                 return False
             return value in values
         
         # Exact match
         try:
-            return int(normalize_token(expression)) == value
+            return normalize_token(expression) == value
         except ValueError:
             return False
 
