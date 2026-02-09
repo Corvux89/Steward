@@ -104,6 +104,14 @@ class SafeLog(SafeObject):
         return SafePlayer(getattr(self._obj, "player"))
     
     @property
+    def event(self):
+        event = getattr(self._obj, "event")
+        if not event:
+            return None
+
+        return getattr(event, "name")
+    
+    @property
     def author(self):
         return SafePlayer(getattr(self._obj, "author"))
     

@@ -766,7 +766,7 @@ class StewardRule:
         context.player.staff_points = max(context.player.staff_points+amount, 0)
 
         await context.player.save()
-        results.append({'type': self.trigger.name, 'success': True})
+        results.append({'type': self.trigger.name, 'success': True, 'amount': amount, 'player_id': context.player.id})
 
         if self.trigger != RuleTrigger.staff_point:
             bot.dispatch(RuleTrigger.staff_point.name, context.player)
