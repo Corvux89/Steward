@@ -132,7 +132,8 @@ class Character:
             "xp": self.xp,
             "currency": self.currency,
             "limited_xp": self.limited_xp,
-            "limited_currency": self.limited_currency
+            "limited_currency": self.limited_currency,
+            "avatar_url": self.avatar_url
         }
 
         insert_dict = {
