@@ -198,4 +198,4 @@ class FormView(BasicFormView):
     async def send(self):
         content = await self.get_message_content()
         super(FormView, self).__init__(*content["content"])
-        await self.ctx.respond(view=self)
+        await self.ctx.respond(view=self, allowed_mentions=discord.AllowedMentions(users=False, roles=False))

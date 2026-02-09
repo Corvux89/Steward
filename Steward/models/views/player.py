@@ -125,7 +125,7 @@ class PlayerInfoView(BaseInfoView):
         await self.defer_to(CharacterInfoView, interaction)
 
     async def _on_player_info(self, interaction: discord.Interaction):
-        modal = PlayerInformationModal(self.bot, self.player)
+        modal = PlayerInformationModal(self.bot, self.player, self.admin)
         await self.prompt_modal(modal, interaction)
 
         await self.refresh_content(interaction)
@@ -194,7 +194,7 @@ class CharacterInfoView(BaseInfoView):
     
     def _add_currency_section(self, container: ui.Container):
         currency_display = ui.TextDisplay(
-            f"**{self.ctx.server.currency_str}**: {self.character.currency}\n"
+            f"**{self.ctx.server.currency_str}**: {self.character.currency:,}\n"
         )
     
         if self.staff:
@@ -209,7 +209,7 @@ class CharacterInfoView(BaseInfoView):
             container.add_item(currency_display)
 
         limited_currency_display = ui.TextDisplay(
-            f"**Limited {self.ctx.server.currency_str}**: {self.character.limited_currency}"
+            f"**Limited {self.ctx.server.currency_str}**: {self.character.limited_currency:,}"
         )
 
         if self.staff:
@@ -226,7 +226,7 @@ class CharacterInfoView(BaseInfoView):
     def _add_xp_section(self, container: ui.Container):
         xp_level = self.ctx.server.get_level_for_xp(self.character.xp)
         xp_display = ui.TextDisplay(
-            f"**XP**: {self.character.xp} (Level {xp_level}{' eligible' if xp_level > self.character.level else ''})"
+            f"**XP**: {self.character.xp:,} (Level {xp_level}{' eligible' if xp_level > self.character.level else ''})"
         )
         
         if self.staff:
@@ -241,7 +241,7 @@ class CharacterInfoView(BaseInfoView):
             container.add_item(xp_display)
 
         limited_xp_display = ui.TextDisplay(
-            f"**Limited XP**: {self.character.limited_xp}"
+            f"**Limited XP**: {self.character.limited_xp:,}"
         )
 
         if self.staff:
@@ -260,7 +260,7 @@ class CharacterInfoView(BaseInfoView):
             activity_point = self.ctx.server.get_activitypoint_for_points(self.character.activity_points)
             activity_level = 'Level 0' if not activity_point else f'Level {activity_point.level}'
             activity_display = ui.TextDisplay(    
-                f"**Activity Points**: {self.character.activity_points} ({activity_level})"
+                f"**Activity Points**: {self.character.activity_points:,} ({activity_level})"
             )
 
             if self.admin:

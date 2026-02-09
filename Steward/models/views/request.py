@@ -406,7 +406,7 @@ class LoggedView(ui.DesignerView):
 
         if request.notes:
             container.add_item(
-                ui.TextDisplay(f"## Activity Title\n{request.notes}")
+                ui.TextDisplay(f"### Activity Title\n{request.notes}")
             )
 
         get_character_request_sections(container, request, header="###")

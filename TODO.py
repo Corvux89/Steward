@@ -10,7 +10,6 @@
 # TODO: Apply/submit command verification if no rules exist to process them (dead ends)
 # TODO: Currency and XP displays should all be commma formatted properly
 # TODO: Global events
-# TODO: Fix log view (Epsi feedback)
 # TODO: Form/application overflows to secondary messages
 # TODO: Form on thread delete display fields
 # TODO: On Member Leave rules

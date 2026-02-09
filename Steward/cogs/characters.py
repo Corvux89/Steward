@@ -86,7 +86,7 @@ class CharacterCog(commands.Cog):
         admin = is_admin(ctx)
 
         ui = PlayerInfoView(self.bot, ctx, player, staff=True, admin=admin)
-        await ctx.send(view=ui)
+        await ctx.send(view=ui, allowed_mentions=discord.AllowedMentions(users=False, roles=False))
         await ctx.delete()
 
     @character_admin_commands.command(
@@ -110,7 +110,7 @@ class CharacterCog(commands.Cog):
             raise CharacterNotFound(player)
 
         ui = CreateLogView(ctx.author, self.bot, player, ctx.server)
-        await ctx.send(view=ui)
+        await ctx.send(view=ui, allowed_mentions=discord.AllowedMentions(users=False, roles=False))
         await ctx.delete()
 
     @commands.slash_command(
@@ -134,7 +134,7 @@ class CharacterCog(commands.Cog):
 
 
         ui = PlayerInfoView(self.bot, ctx, player, delete=False)
-        await ctx.send(view=ui)
+        await ctx.send(view=ui, allowed_mentions=discord.AllowedMentions(users=False, roles=False))
         await ctx.delete()
 
     @commands.slash_command(
@@ -159,7 +159,7 @@ class CharacterCog(commands.Cog):
             raise CharacterNotFound(ctx.player)
         
         ui = Requestview(self.bot, ctx, ctx.player, character)
-        await ctx.send(view=ui)
+        await ctx.send(view=ui, allowed_mentions=discord.AllowedMentions(users=False, roles=False))
         await ctx.delete()
 
     @commands.slash_command(

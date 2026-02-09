@@ -108,11 +108,23 @@ class PlayerInformationModal(ui.DesignerModal):
     def __init__(
             self, 
             bot: StewardBot,
-            player: Player
+            player: Player,
+            admin: bool = False
     ):
         self.bot = bot
         self.player = player
+        self.admin = admin
 
+        if self.admin == True:
+            staff_points = ui.Label(
+                "Staff Points",
+                ui.InputText(
+                    placeholder="Staff Points",
+                    value=getattr(self.player, "staff_points", "0"),
+                    custom_id="staff_points",
+                    max_length=100
+                )
+            )
 
         notes_input = ui.Label(
             "Notes",
@@ -145,10 +157,18 @@ class PlayerInformationModal(ui.DesignerModal):
     async def callback(self, interaction):
         notes = self.get_item("player_notes").value
         campaign = self.get_item("player_campaign").value
+        try:
+            if self.admin == True:
+                staff_points = int(self.get_item("staff_points").value)
+            else:
+                staff_points = self.player.staff_points
+        except:
+            staff_points = self.player.staff_points
         
-        if self.player.notes != notes or self.player.campaign != campaign:
+        if self.player.notes != notes or self.player.campaign != campaign or self.player.staff_points != staff_points:
             self.player.notes = notes
             self.player.campaign = campaign
+            self.player.staff_points = staff_points
             await self.player.save()
 
             await StewardLog.create(
