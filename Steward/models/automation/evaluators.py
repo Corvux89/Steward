@@ -383,13 +383,21 @@ class StewardEvaluator(ast.NodeVisitor):
     
     def visit_BoolOp(self, node):
         self._check_statement_limit()
-        
-        values = [self.visit(v) for v in node.values]
-        
+
         if isinstance(node.op, ast.And):
-            return all(values)
+            last_value = None
+            for value_node in node.values:
+                last_value = self.visit(value_node)
+                if not last_value:
+                    return last_value
+            return last_value
         elif isinstance(node.op, ast.Or):
-            return any(values)
+            last_value = None
+            for value_node in node.values:
+                last_value = self.visit(value_node)
+                if last_value:
+                    return last_value
+            return last_value
         else:
             raise InvalidExpression(
                 f"Boolean operator {type(node.op).__name__} is not supported",
