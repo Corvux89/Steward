@@ -114,6 +114,7 @@ class PlayerInformationModal(ui.DesignerModal):
         self.bot = bot
         self.player = player
         self.admin = admin
+        content = []
 
         if self.admin == True:
             staff_points = ui.Label(
@@ -125,6 +126,7 @@ class PlayerInformationModal(ui.DesignerModal):
                     max_length=100
                 )
             )
+            content.append(staff_points)
 
         notes_input = ui.Label(
             "Notes",
@@ -137,6 +139,7 @@ class PlayerInformationModal(ui.DesignerModal):
                 required=False
             )
         )
+        content.append(notes_input)
 
         campaign_input = ui.Label(
             "Campaign",
@@ -148,9 +151,10 @@ class PlayerInformationModal(ui.DesignerModal):
             )
         )
 
+        content.append(campaign_input)
+
         super().__init__(
-            notes_input,
-            campaign_input,
+            *content,
             title="Player Information"
         )
 
