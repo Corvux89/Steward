@@ -855,6 +855,7 @@ class CharacterActivityView(BaseInfoView):
             label="Back"
         )
         back_button.callback = self._on_back
+        buttons.append(back_button)
 
         content.append(
             ui.ActionRow(

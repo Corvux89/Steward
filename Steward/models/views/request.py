@@ -399,17 +399,17 @@ class PlayerRequestView(StewardView):
 class LoggedView(ui.DesignerView):
     def __init__(self, request: Request, activity: Activity, log_user: discord.User):
         container = ui.Container(
-            ui.TextDisplay("## Request Logged!"),
+            ui.TextDisplay(f"## {activity.name} {activity.verb}"),
             get_player_header(request.primary_player),
             ui.Separator()
         )
 
-        get_character_request_sections(container, request)
-
         if request.notes:
             container.add_item(
-                ui.TextDisplay(f"## Notes\n{request.notes}")
+                ui.TextDisplay(f"## Activity Title\n{request.notes}")
             )
+
+        get_character_request_sections(container, request, header="###")
 
         container.add_item(
             ui.TextDisplay(f"-# {activity.name} logged by {log_user.display_name}")

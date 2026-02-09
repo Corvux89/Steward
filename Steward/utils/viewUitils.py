@@ -131,10 +131,11 @@ def get_character_info_sections(player: Player, server: Server, callback: Corout
 
     return char_list
 
-def get_character_request_sections(container: ui.Container, request: Request, callback: Coroutine = None):
+def get_character_request_sections(container: ui.Container, request: Request, callback: Coroutine = None, **kwargs):
+    header = kwargs.get('header', '##')
     container.add_item(
         ui.TextDisplay(
-            "## Requested for:"
+            f"{header} Requested for:"
         )
     )
 
