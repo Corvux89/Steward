@@ -10,7 +10,8 @@ from ..views import StewardView
 BREAK_CHEAK = [
     CHANNEL_BREAK,
     CHANNEL_BREAK.replace(" ", ""),
-    "```\n  \n```"    
+    "```\n  \n```",    
+    "```\n \n```"
 ]
 
 class CategoryDashboardView(StewardView):
