@@ -57,8 +57,8 @@ class CategoryDashboardView(StewardView):
                         self.available.append(channel)
                     elif last_message:
                         self.unavailable.append(channel)
-                    else:
-                        self.available.append(channel)
+                else:
+                    self.available.append(channel)
 
 
         self.clear_items()
