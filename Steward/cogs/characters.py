@@ -57,6 +57,9 @@ class CharacterCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message_delete(self, message: discord.Message):
+        if not hasattr(self.bot, "db"):
+            return
+
         if (request := await Request.fetch(self.bot, message.id)):
             await request.delete()
 

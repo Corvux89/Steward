@@ -26,6 +26,7 @@ from Steward.models.objects.rules import StewardRule
 from Steward.models.objects.request import Request
 from Steward.models.objects.form import FormTemplate, Application
 from Steward.models.objects.patrol import Patrol
+from Steward.models.objects.dashboards import CategoryDashboard
 
 log = logging.getLogger(__name__)
 

@@ -9,19 +9,41 @@ This document summarizes how rules, expressions, triggers, and actions work in S
 4. For scheduled rules, `last_run_ts` is updated after execution.
 
 ## Triggers
-- `member_join`, `member_leave`, `level_up`, `new_character`, `inactivate_character`, `log`, `scheduled`, `staff_point`, `new_request`, `new_application`
+Triggers (RuleTrigger):
+- `member_join`: Member Join
+- `member_leave`: Member Leave
+- `level_up`: Character Level Up
+- `new_character`: New Character
+- `inactivate_character`: Inactivate Character
+- `log`: Log Created
+- `scheduled`: Scheduled
+- `staff_point`: Staff Point
+- `new_request`: New Request
+- `new_application`: New Application
+- `patrol_complete`: Patrol Completed
 
 ## Context Available in Expressions
+
 Expressions and templates can access the automation context:
-- `server`: Guild/server object
-- `player`: Player object (may be None)
-- `character`: Character object (may be None)
-- `log`: StewardLog object (may be None)
 - `ctx`: Discord interaction/command context (may be None)
-- `rule`: The current rule object
+- `character`: Character object (may be None)
+- `player`: Player object (may be None)
+- `server`: Guild/server object
 - `npc`: NPC object (may be None)
+- `log`: StewardLog object (may be None)
 - `request`: Staff request object (may be None)
 - `application`: Application object (may be None)
+- `patrol`: Patrol object (may be None)
+- `rule`: The current rule object
+
+## Patrol
+A context object representing a completed patrol, available for rules with the `patrol_complete` trigger.
+
+### Safe Attributes (Available in Expressions)
+- **`host`** (`Player`): Host player object
+- **`characters`** (`list[Character]`): List of participating characters
+- **`outcome`** (`str`): Outcome string (`extreme_clear`, `full_clear`, `half_clear`, `failure`, `incomplete`)
+- **`channel`** (`Channel`): Discord channel object
 
 ## Condition Expressions (`condition_expr`)
 - Evaluated with `eval_bool`; must return truthy/falsey.
@@ -45,59 +67,45 @@ Expressions and templates can access the automation context:
 - Standard cron uses exact matches (e.g., `0 9 * * 1-5` for weekdays at 09:00 UTC).
 
 ## Actions
-Actions are dicts; you can provide a single dict or a list to run sequentially.
 
-### `message`
-Fields:
-- `channel_id` (optional): falls back to `ctx.channel` if omitted
-- `content`: text with templates allowed
-- `embed` (optional):
-  - `title`, `description`, `color`
-  - `fields`: list of `{name, value, inline}` (templates allowed)
-  - `footer`, `thumbnail`
-  - `timestamp` (optional): ISO timestamp string
+Actions (action_data type):
 
-### `reward`
-- Uses StewardLog.create to reward currency/xp.
-- Fields: `activity`, `currency`, `xp`, `notes`.
+- `message`: Send a message or embed.
+  - `channel_id` (optional): falls back to `ctx.channel` if omitted
+  - `content`: text with templates allowed
+  - `embed` (optional):
+    - `title`, `description`, `color`
+    - `fields`: list of `{name, value, inline}` (templates allowed)
+    - `footer`, `thumbnail`
+    - `timestamp` (optional): ISO timestamp string
 
-### `reset_limited`
-- Resets limited values on all server characters and upserts.
-- Fields (all optional, default `true`):
-  - `xp`
-  - `currency`
-  - `activity_points`
+- `reward`: Reward currency/xp.
+  - `activity`, `currency`, `xp`, `notes`
+  - `host_activity`, `host_currency`, `host_xp` (for patrol host rewards)
 
-### `staff_points`
-- Adds staff points to the target player.
-- Fields:
+- `reset_limited`: Reset limited values on all server characters and upsert.
+  - `xp` (default true)
+  - `currency` (default true)
+  - `activity_points` (default true)
+
+- `staff_points`: Add staff points to the target player.
   - `value` (expression or number)
 
-### `bulk_reward`
-- Rewards all players that satisfy a condition expression.
-- Fields:
+- `bulk_reward`: Reward all players that satisfy a condition expression.
   - `condition` (expression; if missing, defaults to falsey)
   - `activity`, `currency`, `xp`, `notes`
 
-### `post_request`
-- Posts or updates a staff request view.
-- Fields:
+- `post_request`: Post or update a staff request view.
   - `channel_id` (optional): falls back to `ctx.channel` if omitted
 
-### `post_application`
-- Posts or updates an application summary via webhook.
-- Fields:
+- `post_application`: Post or update an application summary via webhook.
   - `channel_id` (optional): falls back to `ctx.channel` if omitted
 
-### `assign_role`
-- Adds a role to the target player.
-- Fields:
+- `assign_role`: Add a role to the target player.
   - `role_id`
   - `reason` (optional)
 
-### `remove_role`
-- Removes a role from the target player.
-- Fields:
+- `remove_role`: Remove a role from the target player.
   - `role_id`
   - `reason` (optional)
 

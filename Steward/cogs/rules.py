@@ -33,6 +33,9 @@ class RulesCog(commands.Cog):
     
     @commands.Cog.listener()
     async def on_raw_member_remove(self, payload: discord.RawMemberRemoveEvent):
+        if not hasattr(self.bot, "db"):
+            return
+
         guild = self.bot.get_guild(payload.guild_id)
         server = await Server.get_or_create(self.bot.db, guild)
         player= await Player.get_or_create(self.bot.db, server.get_member(payload.user.id))
@@ -43,12 +46,15 @@ class RulesCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
-       server = await Server.get_or_create(self.bot.db, member.guild)
-       player = await Player.get_or_create(self.bot.db, member.guild)
+        if not hasattr(self.bot, "db"):
+            return
+        
+        server = await Server.get_or_create(self.bot.db, member.guild)
+        player = await Player.get_or_create(self.bot.db, member.guild)
 
-       rules = await execute_rules_for_trigger(self.bot, server, RuleTrigger.member_join.name, player=player)
+        rules = await execute_rules_for_trigger(self.bot, server, RuleTrigger.member_join.name, player=player)
 
-       log.info(rules)
+        log.info(rules)
 
     @commands.Cog.listener()
     async def on_new_character(self, ctx, character: Character, log_entry: StewardLog):

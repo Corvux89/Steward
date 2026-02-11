@@ -364,3 +364,20 @@ def chunk_text(
     # remove extra split_char from last chunk
     chunks[-1] = chunks[-1][: -len(split_char)]
     return chunks
+
+async def get_last_message_in_channel(channel: discord.TextChannel) -> discord.Message:
+    last_message = None
+
+    if not (last_message := channel.last_message):
+        try:
+            last_message = next(
+                (msg for msg in channel.history(limit=1)),
+                None
+            )
+        except:
+            try:
+                last_message = await channel.fetch_message(channel.last_message_id)
+            except:
+                pass
+            
+    return last_message

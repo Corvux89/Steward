@@ -56,3 +56,7 @@ class PatrolOutcome(StewardEnum):
     half_clear = "Half Clear"
     failure = "Failure"
     incomplete = "Incomplete"
+
+class MarketType(StewardEnum):
+    auction = "Auction House"
+    shop = "Shop"

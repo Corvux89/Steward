@@ -8,6 +8,7 @@ from timeit import default_timer as timer
 
 from Steward.bot import StewardBot, StewardApplicationContext
 from Steward.models.objects.activityPoints import ActivityPoints
+from Steward.models.objects.dashboards import CategoryDashboard
 from Steward.models.objects.enum import RuleTrigger
 from Steward.models.objects.exceptions import StewardError
 from Steward.models.objects.levels import Levels
@@ -65,6 +66,10 @@ class ServerCog(commands.Cog):
         discord.OptionChoice(
             "Forms",
             value="forms"
+        ),
+        discord.OptionChoice(
+            "Dashboards",
+            value="dashboards"
         ),
         discord.OptionChoice(
             "All",
@@ -152,6 +157,15 @@ class ServerCog(commands.Cog):
                     filename="forms.csv"
                 )
             )
+
+        if config_item == "dashboards" or config_item == "all":
+            files.append(
+                discord.File(
+                    await self._dashboard_config(ctx.server),
+                    description="Dashboards",
+                    filename="dashboards.csv"
+                )
+            )
         
 
         await ctx.respond(files=files)
@@ -202,6 +216,9 @@ class ServerCog(commands.Cog):
 
             elif f_name_lower.startswith('forms'):
                 await self._form_config(ctx.server, text)
+
+            elif f_name_lower.startswith("dashboards"):
+                await self._dashboard_config(ctx.server, text)
 
             else:
                 return await ctx.respond("I don't know aht you're trying to do")
@@ -582,3 +599,74 @@ class ServerCog(commands.Cog):
 
             output.seek(0)
             return output
+        
+    async def _dashboard_config(self, server: Server, csv_text: str = None):
+        header_mapping = {
+            "id": "Dashboard ID",
+            "channel_id": "Display Channel",
+            "category_id": "Dashboard Channel Category",
+            "excluded_channel_ids": "Excluded Channels"
+        }
+        dashboards = await CategoryDashboard.fetch_all(self.bot, server.id)
+
+        if csv_text:
+            reader = csv.DictReader(io.StringIO(csv_text))
+            dashboard_ids = set()
+
+            for row in reader:
+                data = {k: row.get(v) for k, v in header_mapping.items() if v in row}
+                data["guild_id"] = server.id
+
+                if 'id' in data and data['id'] == '':
+                    del data['id']
+
+                if 'excluded_channel_ids' in data and data['excluded_channel_ids']:
+                    data['excluded_channel_ids'] = [int(x.strip()) for x in data['excluded_channel_ids'].strip('[]').split(',') if x.strip()]
+                else:
+                    data['excluded_channel_ids'] = []
+
+                data['channel_id'] = int(data['channel_id'])
+                data['category_id'] = int(data['category_id'])
+
+                dashboard = None
+                id_val = data.get('id') if 'id' in data else None
+                if id_val:
+                    dashboard = next((d for d in dashboards if str(getattr(d, 'id', None)) == str(id_val)), None)
+                if not dashboard:
+                    dashboard = next((d for d in dashboards if getattr(d, 'channel_id', None) == data['channel_id'] and getattr(d, 'category_id', None) == data['category_id']), None)
+
+                if dashboard:
+                    for k, v in data.items():
+                        if k != 'id':
+                            setattr(dashboard, k, v)
+                    await dashboard.upsert()
+                    await dashboard.refresh()
+                    dashboard_ids.add(getattr(dashboard, 'id', None))
+                else:
+                    dashboard = CategoryDashboard(self.bot, **data)
+                    message = await dashboard.channel.send("loading")
+                    await message.pin()
+                    dashboard.message_id = message.id
+                    dashboard._message = message
+                    await dashboard.upsert()
+                    await dashboard.refresh()
+                    dashboard_ids.add(getattr(dashboard, 'id', None))
+
+            for dashboard in dashboards:
+                if dashboard.id not in dashboard_ids:
+                    await dashboard.delete()
+
+        else:
+            schema = CategoryDashboard.CategoryDashboardSchema()
+            output = io.StringIO()
+            writer = csv.DictWriter(output, fieldnames=header_mapping.values(), quoting=csv.QUOTE_NONNUMERIC)
+            writer.writeheader()
+
+            for dashboard in dashboards:
+                data = schema.dump(dashboard)
+                row = {header_mapping[k]: v for k, v in data.items() if k in header_mapping}
+                writer.writerow(row)
+
+            output.seek(0)
+            return output
+

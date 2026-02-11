@@ -30,7 +30,7 @@ class MemberCog(commands.Cog):
         player = await Player.get_or_create(self.bot.db, member)
         admin = is_admin(ctx)
         ui = PlayerInfoView(self.bot, ctx, player, staff=True, admin=admin)
-        await ctx.send(view=ui)
+        await ctx.send(view=ui, allowed_mentions=discord.AllowedMentions(users=False, roles=False))
         await ctx.delete()
 
     @commands.user_command(name="Create Log")
@@ -47,7 +47,7 @@ class MemberCog(commands.Cog):
             raise CharacterNotFound(player)
         
         ui = CreateLogView(ctx.author, self.bot, player, ctx.server, is_admin(ctx))
-        await ctx.send(view=ui)
+        await ctx.send(view=ui, allowed_mentions=discord.AllowedMentions(users=False, roles=False))
         await ctx.delete()
 
     @commands.user_command(name="Info")
@@ -57,6 +57,6 @@ class MemberCog(commands.Cog):
         if not player.active_characters:
             raise CharacterNotFound(player)
 
-        ui = PlayerInfoView(self.bot, ctx, player, delete=False)
+        ui = PlayerInfoView(self.bot, ctx, player, delete=False, allowed_mentions=discord.AllowedMentions(users=False, roles=False))
         await ctx.send(view=ui)
         await ctx.delete()

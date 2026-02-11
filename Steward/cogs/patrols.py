@@ -42,12 +42,18 @@ class PatrolCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_channel_delete(self, channel):
+        if not hasattr(self.bot, "db"):
+            return
+
         if (patrol := await Patrol.fetch(self.bot, channel)):
             patrol.end_ts = datetime.now(timezone.utc)
             await patrol.upsert()
 
     @commands.Cog.listener()
     async def on_message_delete(self, message: discord.Message):
+        if not hasattr(self.bot, "db"):
+            return
+
         if (patrol := await Patrol.fetch(self.bot, message.channel, message.id)):
             patrol.end_ts = datetime.now(timezone.utc)
             await patrol.upsert()
