@@ -13,7 +13,7 @@ from ...utils.dbUtils import execute_query
 
 if TYPE_CHECKING:
     from .player import Player
-    from ...bot import StewardContext
+    from ...bot import StewardApplicationContext
     
 
 class Character:
@@ -166,7 +166,7 @@ class Character:
 
     async def update_activity_points(
             self,
-            ctx: "StewardContext",
+            ctx: "StewardApplicationContext",
             increment: bool = True
     ) -> None:
         from .player import Player

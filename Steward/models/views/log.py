@@ -14,11 +14,12 @@ from Steward.models.objects.log import StewardLog
 from Steward.models.objects.player import Player
 from Steward.models.objects.servers import Server
 from Steward.models.views import StewardView
+from Steward.utils.discordUtils import is_admin
 from Steward.utils.viewUitils import get_activity_select_option, get_character_select_option, get_player_header
 
 class CreateLogView(StewardView):
     __copy_attrs__ = [
-        'bot', 'player', 'server', 'activity', 'notes', 'currency', 'xp', "owner", "character"
+        'bot', 'player', 'server', 'activity', 'notes', 'currency', 'xp', "owner", "character", "admin"
     ]
 
     def __init__(
@@ -27,12 +28,14 @@ class CreateLogView(StewardView):
             bot: StewardBot,
             player: Player,
             server: Server,
+            admin: bool,
             **kwargs
     ):
         self.owner = owner
         self.bot = bot
         self.player = player
         self.server = server
+        self.admin = admin
 
         self.activity: Activity = kwargs.get("activity")
         self.notes = kwargs.get("notes")
@@ -68,7 +71,7 @@ class CreateLogView(StewardView):
         )
 
         char_select = get_character_select_option(self.player, self.character, self._character_select, enable_def=False)
-        activity_select = get_activity_select_option(self.server, self.activity, self._activity_select)
+        activity_select = get_activity_select_option(self.server, self.activity, self._activity_select, admin=admin)
 
         detail_button = ui.Button(
             label="Details",

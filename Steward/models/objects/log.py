@@ -258,7 +258,7 @@ class StewardLog:
             character = kwargs.get("character")
 
         server = await Server.get_or_create(bot.db, bot.get_guild(player.guild.id))
-        context = AutomationContext(player=player, server=server, character=character)
+        context = AutomationContext(player=player, server=server, character=character, patrol=kwargs.get("patrol"))
 
         act: "Activity" = kwargs.get("activity")
         activity = None

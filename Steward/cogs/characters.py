@@ -2,7 +2,7 @@ import discord
 import logging
 
 from discord.ext import commands
-from Steward.bot import StewardBot, StewardContext
+from Steward.bot import StewardApplicationContext, StewardBot, StewardContext
 from Steward.models.objects.request import Request
 from Steward.models.views import confirm_view
 from Steward.models.objects.form import Application, FormTemplate
@@ -15,6 +15,7 @@ from Steward.models.views.player import PlayerInfoView
 from Steward.models.views.request import PlayerRequestView, StaffRequestView, Requestview
 from Steward.utils.autocompleteUtils import form_autocomplete, character_autocomplete
 from Steward.utils.discordUtils import dm_check, is_admin, is_staff, try_delete
+from Steward.utils.viewUitils import get_activity_select_option
 
 
 log = logging.getLogger(__name__)
@@ -76,7 +77,7 @@ class CharacterCog(commands.Cog):
     )
     @commands.check(is_staff)
     async def player_manage(self,
-                            ctx: "StewardContext",
+                            ctx: "StewardApplicationContext",
                             member: discord.Option(
                                 discord.SlashCommandOptionType(6),
                                 description="Player to manage",
@@ -94,7 +95,7 @@ class CharacterCog(commands.Cog):
             description="Give a player an activity reward"
     )
     async def player_reward(self,
-                            ctx: "StewardContext",
+                            ctx: "StewardApplicationContext",
                             member: discord.Option(
                                 discord.SlashCommandOptionType(6),
                                 description="Player to reward",
@@ -103,13 +104,15 @@ class CharacterCog(commands.Cog):
                             ):
         if not ctx.server.activities:
             raise StewardError("No activities are setup for reward. Contact an admin.")
+        elif not get_activity_select_option(ctx.server, None, None, admin=is_admin(ctx)):
+            raise StewardError("No activities are setup for you to log.")
         
         player = await Player.get_or_create(self.bot.db, member)
         
         if not player.active_characters:
             raise CharacterNotFound(player)
 
-        ui = CreateLogView(ctx.author, self.bot, player, ctx.server)
+        ui = CreateLogView(ctx.author, self.bot, player, ctx.server, is_admin(ctx))
         await ctx.send(view=ui, allowed_mentions=discord.AllowedMentions(users=False, roles=False))
         await ctx.delete()
 
@@ -118,7 +121,7 @@ class CharacterCog(commands.Cog):
         description="Displays information for a player"
         )
     async def player_info(self,
-                          ctx: "StewardContext",
+                          ctx: "StewardApplicationContext",
                           member: discord.Option(
                               discord.SlashCommandOptionType(6),
                               description="Player to view. Defaults to the person running the command.",
@@ -143,7 +146,7 @@ class CharacterCog(commands.Cog):
     )
     async def staff_request(
         self,
-        ctx: "StewardContext",
+        ctx: "StewardApplicationContext",
         character: discord.Option(
             str,
             description="Character to request for",
@@ -168,7 +171,7 @@ class CharacterCog(commands.Cog):
     )
     async def application(
         self,
-        ctx: "StewardContext",
+        ctx: "StewardApplicationContext",
         application: discord.Option(
             str,
             description="What are you applying for?",
@@ -189,22 +192,13 @@ class CharacterCog(commands.Cog):
             if not ctx.player.active_characters:
                 raise StewardError("You don't have any active characters. Please create a character first.")
             
-            character_name = await get_character_select_modal(
+            character = await get_character_select_modal(
                 ctx,
                 ctx.player.active_characters,
                 title=f"Select Character for {template.name}"
             )
             
-            if not character_name:
-                await ctx.respond("Character selection cancelled.", ephemeral=True)
-                return
-            
-            char_obj = next(
-                (c for c in ctx.player.active_characters if c.name == character_name),
-                None
-            )
-            
-            if not char_obj:
+            if not character:
                 raise CharacterNotFound(ctx.player)
         
         # Check for existing draft application
@@ -255,7 +249,7 @@ class CharacterCog(commands.Cog):
     )
     async def edit_application(
         self,
-        ctx: "StewardContext"
+        ctx: "StewardApplicationContext"
     ):
         from Steward.models.views.forms import FormView
         from Steward.models.modals import get_character_select_modal

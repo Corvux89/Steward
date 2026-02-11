@@ -1,5 +1,7 @@
 import discord
 
+from Steward.models.objects.enum import PatrolOutcome
+
 from ..models.objects.servers import Server
 from ..models.objects.player import Player
 from ..models.objects.form import FormTemplate
@@ -25,3 +27,6 @@ async def form_autocomplete(ctx: discord.AutocompleteContext):
         return [
                 t.name for t in templates
         ] or []
+
+async def patrol_outcome_autocomplete(ctx: discord.AutocompleteContext):
+        return [c.value for c in PatrolOutcome]

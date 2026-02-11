@@ -2,7 +2,7 @@ import logging
 import discord
 import discord.ui as ui
 
-from Steward.bot import StewardBot, StewardContext
+from Steward.bot import StewardBot, StewardApplicationContext
 from Steward.models.modals.player import NewCharacterModal, PlayerInformationModal
 from Steward.models.modals import get_value_modal
 from Steward.models.objects.character import Character
@@ -25,7 +25,7 @@ class BaseInfoView(StewardView):
     ]
 
     bot: StewardBot
-    ctx: StewardContext
+    ctx: StewardApplicationContext
     player: Player
     staff: bool
     admin: bool
@@ -56,7 +56,7 @@ class BaseInfoView(StewardView):
 
 
 class PlayerInfoView(BaseInfoView):
-    def __init__(self, bot: StewardBot, ctx: StewardContext, player: Player, **kwargs):
+    def __init__(self, bot: StewardBot, ctx: StewardApplicationContext, player: Player, **kwargs):
         self.owner = ctx.author
         self.bot = bot
         self.ctx = ctx
@@ -134,7 +134,7 @@ class PlayerInfoView(BaseInfoView):
         await self.defer_to(NewCharacterView, interaction)
 
 class CharacterInfoView(BaseInfoView):
-    def __init__(self, bot: StewardBot, ctx: StewardContext, player: Player, character: Character, **kwargs):
+    def __init__(self, bot: StewardBot, ctx: StewardApplicationContext, player: Player, character: Character, **kwargs):
         self.owner = ctx.author
         self.bot = bot
         self.ctx = ctx
@@ -582,7 +582,7 @@ class NewCharacterView(BaseInfoView):
     application_type: ApplicationType
     reroll_character: Character
 
-    def __init__(self, bot: StewardBot, ctx: StewardContext, player: Player, **kwargs):
+    def __init__(self, bot: StewardBot, ctx: StewardApplicationContext, player: Player, **kwargs):
         self.owner = ctx.author
         self.bot = bot
         self.ctx = ctx
@@ -642,7 +642,7 @@ class NewCharacterView(BaseInfoView):
         for type in ApplicationType:
             match type:
                 case ApplicationType.new:
-                    default = True if not self.player.active_characters or self.application_type and self.application_type == type else False
+                    default = True if not self.player.active_characters or self.application_type and self.application_type == type or len(self.player.active_characters) < self.ctx.server.max_characters(self.player) else False
                     if len(self.player.active_characters) == 0 or len(self.player.active_characters) < self.ctx.server.max_characters(self.player):
                         options.append(
                             discord.SelectOption(
@@ -651,9 +651,6 @@ class NewCharacterView(BaseInfoView):
                                 default=True
                             )
                         )
-
-                        if default:
-                            self.application_type = ApplicationType.new
                 case ApplicationType.level:
                     pass
 
@@ -666,6 +663,8 @@ class NewCharacterView(BaseInfoView):
                                 default=True if self.application_type and self.application_type == type else False
                             )
                         )
+
+        self.application_type = ApplicationType.from_string(options[0].value)
         reroll_select = ui.Select(
             placeholder="Character Creation Type",
             custom_id="application_type",
@@ -782,7 +781,7 @@ class NewCharacterView(BaseInfoView):
         await self.defer_to(PlayerInfoView, interaction)
 
 class CharacterActivityView(BaseInfoView):
-    def __init__(self, bot: StewardBot, ctx: StewardContext, player: Player, character: Character, **kwargs):
+    def __init__(self, bot: StewardBot, ctx: StewardApplicationContext, player: Player, character: Character, **kwargs):
         self.owner = ctx.author
         self.bot = bot
         self.ctx = ctx

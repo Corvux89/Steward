@@ -1,7 +1,7 @@
 import discord.ui as ui
 import discord
 
-from Steward.bot import StewardBot, StewardContext
+from Steward.bot import StewardBot, StewardApplicationContext
 from Steward.models.objects.character import Character
 from Steward.models.objects.form import FormTemplate, Application
 from Steward.models.objects.player import Player
@@ -14,7 +14,7 @@ class BasicFormView(StewardView):
     __copy_attrs__ = ['bot', 'ctx', 'player', 'template', 'application', 'character']
 
     bot: StewardBot
-    ctx: StewardContext
+    ctx: StewardApplicationContext
     player: Player
     template: FormTemplate
     application: Application
@@ -22,7 +22,7 @@ class BasicFormView(StewardView):
 
 
 class FormView(BasicFormView):
-    def __init__(self, bot: StewardBot, ctx: StewardContext, template: FormTemplate, **kwargs):
+    def __init__(self, bot: StewardBot, ctx: StewardApplicationContext, template: FormTemplate, **kwargs):
         super().__init__()
         self.owner = ctx.author
         self.bot = bot

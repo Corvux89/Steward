@@ -10,6 +10,7 @@ from Steward.models.objects.form import Application
 from Steward.models.objects.character import Character
 from Steward.models.objects.enum import RuleTrigger
 from Steward.models.objects.log import StewardLog
+from Steward.models.objects.patrol import Patrol
 from Steward.models.objects.player import Player
 from Steward.models.objects.request import Request
 from Steward.models.objects.rules import StewardRule
@@ -105,6 +106,13 @@ class RulesCog(commands.Cog):
     async def on_new_application(self, application: Application):
         server = await Server.get_or_create(self.bot.db, application.player.guild)
         rules = await execute_rules_for_trigger(self.bot, server, RuleTrigger.new_application.name, application=application, player=application.player, character=application.character)
+
+        log.info(rules)
+
+    @commands.Cog.listener()
+    async def on_patrol_complete(self, patrol: Patrol):
+        server = await Server.get_or_create(self.bot.db, patrol.channel.guild)
+        rules = await execute_rules_for_trigger(self.bot, server, RuleTrigger.patrol_complete.name, patrol=patrol)
 
         log.info(rules)
 

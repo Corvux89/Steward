@@ -17,6 +17,7 @@ class Activity:
         self.guild_id = kwargs.get("guild_id")
         self.name = kwargs.get("name")
         self.verb = kwargs.get("verb", "Complete")
+        self.admin_only = kwargs.get("admin_only", False)
 
         self.currency_expr = kwargs.get("currency_expr")
         self.xp_expr = kwargs.get("xp_expr")
@@ -32,11 +33,12 @@ class Activity:
         sa.Column("id", sa.UUID, primary_key=True, default=uuid.uuid4),
         sa.Column("name", sa.String, nullable=False),
         sa.Column("verb", sa.String, nullable=True),
+        sa.Column("admin_only", sa.BOOLEAN,nullable=False, default=False),
         sa.Column("guild_id", sa.BigInteger, sa.ForeignKey("servers.id"), nullable=False),
         sa.Column("currency_expr", sa.String(500), nullable=True),
         sa.Column("xp_expr", sa.String(500), nullable=True),
         sa.Column("limited", sa.BOOLEAN, nullable=False, default=False),
-        sa.Column("active", sa.Boolean, nullable=False, default=True),
+        sa.Column("active", sa.BOOLEAN, nullable=False, default=True),
         sa.Column("allow_override", sa.Boolean, nullable=False, default=False),
         sa.Column("inverse_override", sa.Boolean, nullable=False, default=False),
         sa.Index("idx_activity", "guild_id", "name")
@@ -49,6 +51,7 @@ class Activity:
         guild_id = fields.Integer(required=True)
         name = fields.String(required=True)
         verb = fields.String(required=False, allow_none=True)
+        admin_only = fields.Boolean(required=True)
         currency_expr = fields.String(required=False, allow_none=True)
         xp_expr = fields.String(required=False, allow_none=True)
         limited = fields.Boolean(required=True)
@@ -69,6 +72,7 @@ class Activity:
         update_dict = {
             "currency_expr": self.currency_expr,
             "verb": self.verb,
+            "admin_only": self.admin_only,
             "xp_expr": self.xp_expr,
             "limited": self.limited,
             "active": self.active,

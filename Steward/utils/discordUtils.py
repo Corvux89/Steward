@@ -14,8 +14,12 @@ def dm_check(ctx: discord.ApplicationContext) -> bool:
         raise StewardCommandError("Command is not available in DM's")
     return True
 
-def is_owner(ctx: discord.ApplicationContext) -> bool:
-    return ctx.author.id in BOT_OWNERS
+def is_owner(ctx: Union[discord.ApplicationContext, discord.Interaction]) -> bool:
+    if isinstance(ctx, discord.Interaction):
+        id = ctx.user.id
+    else:
+        id = ctx.author.id
+    return id in BOT_OWNERS
 
 def is_admin(ctx: discord.ApplicationContext) -> bool:
     return is_owner(ctx) or ctx.author.guild_permissions.administrator

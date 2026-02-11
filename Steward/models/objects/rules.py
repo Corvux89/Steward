@@ -13,7 +13,7 @@ from Steward.models import metadata
 from Steward.models.automation.context import AutomationContext
 from Steward.models.automation.evaluators import evaluate_expression
 from Steward.models.automation.utils import eval_bool, eval_int
-from Steward.models.objects.enum import QueryResultType, RuleTrigger
+from Steward.models.objects.enum import PatrolOutcome, QueryResultType, RuleTrigger
 from Steward.models.views.request import StaffRequestView
 from Steward.utils.dbUtils import execute_query
 from Steward.utils.discordUtils import chunk_text, get_webhook
@@ -619,18 +619,50 @@ class StewardRule:
     async def _reward(self, action: dict, bot: "StewardBot", context: "AutomationContext", results: []):
         from .log import StewardLog
         from .enum import LogEvent
+        from .player import Player
 
-        await StewardLog.create(
-            bot,
-            author=bot.user,
-            player=context.player,
-            character=context.character,
-            event=LogEvent.automation,
-            activity=action.get('activity'),
-            currency=action.get('currency', 0),
-            xp=action.get('xp', 0),
-            notes=f"Rule: {self.name}\n{action.get('notes')}"
-        )
+        if hasattr(context, "patrol"):
+            if "host_activity" in action or "host_currency" in action or "host_xp" in action:
+                await StewardLog.create(
+                    bot,
+                    author=bot.user,
+                    player=context.patrol.host,
+                    character=context.patrol.host.primary_character,
+                    event=LogEvent.automation,
+                    activity=action.get("host_activity", action.get('activity')),
+                    currency=action.get("host_currency", action.get('currency')),
+                    xp=action.get("host_xp", action.get("xp")),
+                    notes=f"Rule: {self.name}\nPatrol Host Reward.\nOutcome: {PatrolOutcome.from_string(context.patrol.outcome).value}",
+                    patrol=context.patrol
+                )
+
+            for character in context.patrol.characters:
+                player = await Player.get_or_create(bot.db, context.patrol.channel.guild.get_member(character.player_id))
+
+                await StewardLog.create(
+                    bot,
+                    author=bot.user,
+                    player=player,
+                    character=character,
+                    event=LogEvent.automation,
+                    activity=action.get('activity'),
+                    currency=action.get('currency'),
+                    xp=action.get('xp'),
+                    notes=f"Rule: {self.name}\nPatrol Player Reward.\nOutcome: {PatrolOutcome.from_string(context.patrol.outcome).value}",
+                    patrol=context.patrol
+                )
+        else:
+            await StewardLog.create(
+                bot,
+                author=bot.user,
+                player=context.player,
+                character=context.character,
+                event=LogEvent.automation,
+                activity=action.get('activity'),
+                currency=action.get('currency'),
+                xp=action.get('xp'),
+                notes=f"Rule: {self.name}\n{action.get('notes')}"
+            )
 
         results.append({'type': self.trigger.name, 'success': True})
 
@@ -644,6 +676,8 @@ class StewardRule:
             if not channel:
                 results.append({'type': self.trigger.name, 'success': False, 'error': f'Channel {channel_id} not found'})
                 return
+        elif hasattr(context, "patrol"):
+            channel = context.patrol.channel
         elif context.ctx and hasattr(context.ctx, "channel"):
             channel = context.ctx.channel
         else:

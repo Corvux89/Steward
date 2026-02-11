@@ -1,6 +1,9 @@
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 import discord
 import discord.ui as ui
+
+if TYPE_CHECKING:
+    from ..objects.character import Character
 
 
 def _extract_modal_value(interaction, custom_id: str) -> Optional[str]:
@@ -42,6 +45,7 @@ class PromptModal(ui.DesignerModal):
         self.integer = kwargs.get("integer", False)
         required = kwargs.get("required", False)
         items = kwargs.get("items")
+        style = discord.InputTextStyle.long if kwargs.get('style', 'short') == 'long' else discord.InputTextStyle.short
 
         if items:
             # Create select menu from items
@@ -71,10 +75,11 @@ class PromptModal(ui.DesignerModal):
                 "max_length": safe_max_length,
                 "custom_id": "value",
                 "required": required,
+                "style": style
             }
 
             if current_value is not None:
-                safe_value = str(current_value).replace("\r", " ").replace("\n", " ")
+                safe_value = str(current_value).replace("\r", " ")
                 if safe_value:
                     input_kwargs["value"] = safe_value[:safe_max_length]
 
@@ -193,7 +198,7 @@ async def get_character_select_modal(
         ctx: Union[discord.ApplicationContext, discord.Interaction],
         characters: list,
         title: str = "Select Character"
-    ) -> Optional[str]:
+    ) -> Optional["Character"]:
     """
     Display a modal dialog to select a character.
     
@@ -214,7 +219,15 @@ async def get_character_select_modal(
 
     await modal.wait()
     
-    return getattr(modal, "selected_character", None)
+    char =  getattr(modal, "selected_character", None)
+
+    if not char:
+        return None
+    
+    return next(
+        (c for c in characters if c.name == char),
+        None
+    )
 
 
 class DynamicFieldModal(ui.DesignerModal):

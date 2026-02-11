@@ -48,3 +48,11 @@ class RuleTrigger(StewardEnum):
     staff_point = "Staff Point"
     new_request = "New Request"
     new_application = "New Application"
+    patrol_complete = "Patrol Completed"
+
+class PatrolOutcome(StewardEnum):
+    extreme_clear = "Extreme Clear"
+    full_clear = "Full Clear"
+    half_clear = "Half Clear"
+    failure = "Failure"
+    incomplete = "Incomplete"

@@ -15,7 +15,7 @@ def get_player_header(player: Player):
     return ui.Section(
         ui.TextDisplay(f"{player.mention}"),
         accessory=ui.Thumbnail(
-            url=f"{player.avatar.url}"
+            url=f"{player.display_avatar.url}"
         )
     )
 
@@ -27,7 +27,7 @@ def get_character_header(player: Player, character: Character):
             f"-# {character.species_str} {character.class_str}"
         ),
         accessory=ui.Thumbnail(
-            url=character.avatar_url or player.avatar.url
+            url=character.avatar_url or player.display_avatar.url
         ),
     )
 
@@ -70,6 +70,7 @@ def get_character_select_option(player: Player, character: Character = None, cal
 def get_activity_select_option(server: Server, activity: Activity = None, callback: Coroutine = None, **kwargs) -> discord.SelectOption:
     default_label = kwargs.get("default", "Select an Activity")
     enable_def = kwargs.get("enable_def", True)
+    admin = kwargs.get("admin", False)
 
     if enable_def == True:
         act_list = [
@@ -83,6 +84,9 @@ def get_activity_select_option(server: Server, activity: Activity = None, callba
         act_list = []
 
     for act in server.activities:
+        if admin == False and act.admin_only == True:
+            continue
+
         act_list.append(
             discord.SelectOption(
                 label=str(act.name),

@@ -6,7 +6,7 @@ import json
 from discord.ext import commands
 from timeit import default_timer as timer
 
-from Steward.bot import StewardBot, StewardContext
+from Steward.bot import StewardBot, StewardApplicationContext
 from Steward.models.objects.activityPoints import ActivityPoints
 from Steward.models.objects.enum import RuleTrigger
 from Steward.models.objects.exceptions import StewardError
@@ -79,7 +79,7 @@ class ServerCog(commands.Cog):
     @commands.check(is_admin)
     async def export_config(
         self,
-        ctx: "StewardContext",
+        ctx: "StewardApplicationContext",
         config_item: discord.Option(
             discord.SlashCommandOptionType(3),
             description="Configuration item",
@@ -162,7 +162,7 @@ class ServerCog(commands.Cog):
     )
     @commands.check(is_admin)
     async def import_config(self,
-                            ctx: "StewardContext",
+                            ctx: "StewardApplicationContext",
                             file: discord.Option(
                                 discord.SlashCommandOptionType.attachment,
                                 description="CSV file to import",
@@ -220,8 +220,7 @@ class ServerCog(commands.Cog):
             "activity_char_count_threshold": "Activity Character Count Threshold",
             "activity_excluded_channels": "Activity Excluded Channels",
             "currency_label": "Currency Label",
-            "staff_role_id": "Staff Role ID",
-            "staff_request_channel_id": "Staff Request Channel ID"
+            "staff_role_id": "Staff Role ID"
         }
         
         if csv_text:
@@ -236,8 +235,6 @@ class ServerCog(commands.Cog):
                         value = None
                     elif attr == 'max_level' or attr == 'activity_char_count_threshold':
                         value = int(value)
-                    elif attr == 'staff_role_id' or attr == 'staff_request_channel_id':
-                        value = int(value) if value else None
                     elif attr == 'activity_excluded_channels':
                         value = [int(x.strip()) for x in value.strip('[]').split(',') if x.strip()]
 
@@ -266,6 +263,8 @@ class ServerCog(commands.Cog):
         }
 
         if csv_text:
+            await server.load_npcs()
+            csv_keys = set()
             reader = csv.DictReader(io.StringIO(csv_text))
             for row in reader:
                 data = {k: row.get(v) for k, v in header_mapping.items() if v in row}
@@ -279,6 +278,11 @@ class ServerCog(commands.Cog):
                 npc = NPC(self.bot.db, **data)
                 await npc.upsert()
                 await npc.register_command(self.bot)
+                csv_keys.add(npc.key)
+
+            for npc in server.npcs:
+                if npc.key not in csv_keys:
+                    await npc.delete()
             await server.load_npcs()
 
         else:
@@ -343,8 +347,15 @@ class ServerCog(commands.Cog):
         }
         
         if csv_text:
+            await server.load_levels()
             reader = csv.DictReader(io.StringIO(csv_text))
-            for row in reader:
+            rows = list(reader)
+
+            if not rows:
+                raise StewardError("Levels import must include at least one row.")
+
+            csv_levels = set()
+            for row in rows:
                 data = {k: row.get(v) for k, v in header_mapping.items() if v in row}
                 data["guild_id"] = server.id
 
@@ -354,6 +365,11 @@ class ServerCog(commands.Cog):
 
                 level = Levels(self.bot.db, **data)
                 await level.upsert()
+                csv_levels.add(level.level)
+
+            for existing_level in server.levels:
+                if existing_level.level not in csv_levels:
+                    await existing_level.delete()
 
             await server.load_levels()
         else:
@@ -374,6 +390,7 @@ class ServerCog(commands.Cog):
         header_mapping = {
             "name": "Name",
             "verb": "Verb",
+            "admin_only": "Admin Only",
             "currency_expr": "Currency Reward Expression",
             "xp_expr": "XP Reward Expression",
             "limited": "Limited/Capped?",
@@ -396,6 +413,8 @@ class ServerCog(commands.Cog):
                     data['allow_override'] = data["allow_override"].lower() in ('true', '1', 'yes')
                 if 'inverse_override' in data:
                     data['inverse_override'] = data["inverse_override"].lower() in ('true', '1', 'yes')
+                if 'admin_only' in data:
+                    data['admin_only'] = data["admin_only"].lower() in ('true', '1', 'yes')
 
                 if not data.get('currency_expr'):
                     data['currency_expr'] = None
@@ -517,6 +536,8 @@ class ServerCog(commands.Cog):
         }
 
         if csv_text:
+            existing_templates = await FormTemplate.fetch_all(self.bot.db, server.id)
+            csv_names = set()
             reader = csv.DictReader(io.StringIO(csv_text))
 
             for row in reader:
@@ -534,6 +555,11 @@ class ServerCog(commands.Cog):
 
                 application = FormTemplate(self.bot.db, **data)
                 await application.upsert()
+                csv_names.add(application.name)
+
+            for template in existing_templates:
+                if template.name not in csv_names:
+                    await template.delete()
 
         else:
             schema = FormTemplate.ApplicationTemplateSchema(self.bot.db)

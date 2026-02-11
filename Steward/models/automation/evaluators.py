@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 from Steward.models.automation.functions import rand, randint, typeof
 from Steward.models.automation.exceptions import InvalidExpression, StewardValueError, LimitException
 from Steward.models.automation.context import AutomationContext
+from Steward.models.objects.patrol import Patrol
 
 class SafeObject:
     """Base class for safe wrapper objects that restricts access to dangerous methods"""
@@ -52,7 +53,7 @@ class SafePlayer(SafeObject):
     """Safe wrapper for Player objects - read-only access"""
     _allowed_attrs = {
         'id', 'guild_id', 'campaign', 'primary_character', 'highest_level_character', 'mention', 'name', 'display_name', 
-        'avatar', 'staff_points', 'roles', 'active_characters'
+        'avatar', 'staff_points', 'roles', 'active_characters', 'display_avatar'
     }
     _allowed_methods = set()
 
@@ -118,6 +119,16 @@ class SafeLog(SafeObject):
     @property
     def character(self):
         return SafeCharacter(getattr(self._obj, "character"))
+    
+class SafePatrol(SafeObject):
+    _allowed_attrs = {
+        "id", "notes", "created_ts", "end_ts", "outcome",
+        "characters", "character_ids"
+    }
+
+    @property
+    def characters(self):
+        return [SafeCharacter(c) for c in getattr(self._obj, "characters")]
 
 
 def safe_getattr(obj, attr, default=''):
@@ -545,6 +556,8 @@ def evaluate_expression(
                 names[key] = SafeNPC(value)
             elif isinstance(value, StewardLog):
                 names[key] = SafeLog(value)
+            elif isinstance(value, Patrol):
+                names[key] = SafePatrol(value)
             else:
                 names[key] = value
     

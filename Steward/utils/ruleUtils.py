@@ -3,7 +3,7 @@ from Steward.models.automation.context import AutomationContext
 from Steward.models.objects.servers import Server
 
 if TYPE_CHECKING:
-    from Steward.bot import StewardContext, StewardBot
+    from Steward.bot import StewardApplicationContext, StewardBot
     from Steward.models.objects.rules import StewardRule
 
 async def execute_rules_for_trigger(

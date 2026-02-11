@@ -79,6 +79,19 @@ class FormTemplate:
 
         await execute_query(self._db, query, QueryResultType.none)
 
+    async def delete(self) -> None:
+        query = (
+            self.application_template_table.delete()
+            .where(
+                sa.and_(
+                    self.application_template_table.c.guild_id == self.guild_id,
+                    self.application_template_table.c.name == self.name
+                )
+            )
+        )
+
+        await execute_query(self._db, query, QueryResultType.none)
+
     @staticmethod
     async def fetch_all(db: AsyncEngine, guild_id: int) -> list["FormTemplate"]:
         query = (

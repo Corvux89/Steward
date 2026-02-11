@@ -3,7 +3,7 @@ import discord
 from discord.ext import commands
 
 
-from Steward.bot import StewardBot, StewardContext
+from Steward.bot import StewardBot, StewardApplicationContext
 from Steward.models.modals import get_value_modal
 from Steward.models.modals.messages import SayEditModal
 from Steward.models.objects.enum import WebhookType
@@ -28,7 +28,7 @@ class MessageCog(commands.Cog):
         log.info(f"Cog '{self.__cog_name__}' loaded")
 
     @commands.message_command(name="Edit")
-    async def message_edit(self, ctx: StewardContext, message: discord.Message):
+    async def message_edit(self, ctx: StewardApplicationContext, message: discord.Message):
         # Character Message
         if (
             (webhook := StewardWebhook(ctx, message=message))
@@ -50,7 +50,7 @@ class MessageCog(commands.Cog):
             raise StewardError("This message cannot be edited")
         
     @commands.message_command(name="Delete")
-    async def message_delete(self, ctx: StewardContext, message: discord.Message):
+    async def message_delete(self, ctx: StewardApplicationContext, message: discord.Message):
          # Character Message
         if (
             (webhook := StewardWebhook(ctx, message=message))
@@ -81,7 +81,7 @@ class MessageCog(commands.Cog):
 
     @commands.message_command(name="Approve")
     @commands.check(is_staff)
-    async def message_approve(self, ctx: StewardContext, message: discord.Message):
+    async def message_approve(self, ctx: StewardApplicationContext, message: discord.Message):
         # Request
         if (
             request := await Request.fetch(self.bot, message.id)

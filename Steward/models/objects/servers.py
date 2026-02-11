@@ -41,7 +41,6 @@ class Server(discord.Guild):
         self.activity_excluded_channels = kwargs.get("activity_excluded_channels", [])
         self.currency_label = kwargs.get("currency_label", "gp")
         self.staff_role_id: int = kwargs.get("staff_role_id")
-        self.staff_request_channel_id: int = kwargs.get("staff_request_channel_id")
 
         # Virtual Attributes
         self.npcs: list[NPC] = []
@@ -70,7 +69,6 @@ class Server(discord.Guild):
         sa.Column("activity_excluded_channels", ARRAY(sa.BigInteger), nullable=False, default=[]),
         sa.Column("currency_label", sa.String, nullable=False, default="gp"),
         sa.Column("staff_role_id", sa.BigInteger, nullable=True),
-        sa.Column("staff_request_channel_id", sa.BigInteger, nullable=True)
     )
 
     class ServerSchema(Schema):
@@ -84,7 +82,6 @@ class Server(discord.Guild):
         activity_excluded_channels = fields.List(fields.Integer, allow_none=False)
         currency_label = fields.String()
         staff_role_id = fields.Integer(allow_none=True, required=False)
-        staff_request_channel_id = fields.Integer(allow_none=True, required=False)
 
         @post_load
         def make_guild(self, data, **kwargs) -> dict:
@@ -295,8 +292,7 @@ class Server(discord.Guild):
                 activity_char_count_threshold = self.activity_char_count_threshold,
                 activity_excluded_channels = self.activity_excluded_channels,
                 currency_label = self.currency_label,
-                staff_role_id = self.staff_role_id,
-                staff_request_channel_id = self.staff_request_channel_id
+                staff_role_id = self.staff_role_id
             )
             .returning(self.guilds_table)
         )

@@ -25,6 +25,7 @@ from Steward.models.objects.activity import Activity
 from Steward.models.objects.rules import StewardRule
 from Steward.models.objects.request import Request
 from Steward.models.objects.form import FormTemplate, Application
+from Steward.models.objects.patrol import Patrol
 
 log = logging.getLogger(__name__)
 
@@ -174,9 +175,8 @@ class StewardBot(commands.Bot):
         if isinstance(error, commands.CommandNotFound) and isinstance(
             ctx, commands.Context
         ):
-            return await ctx.send(
-                embed=ErrorEmbed(f"No npc with the key `{ctx.invoked_with}` found.")
-            )
+            # NPC Error
+            return
 
         elif (
             hasattr(ctx.command, "on_error")

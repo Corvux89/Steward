@@ -13,7 +13,7 @@ from Steward.utils.discordUtils import get_webhook
 if TYPE_CHECKING:
     from Steward.models.objects.activityPoints import ActivityPoints
     from Steward.models.objects.character import Character
-    from Steward.bot import StewardContext
+    from Steward.bot import StewardApplicationContext
     from Steward.models.objects.npc import NPC
 
 class Player(discord.Member):
@@ -115,7 +115,7 @@ class Player(discord.Member):
         elif character := self.primary_character:
             return character
 
-    async def send_webhook_message(self, ctx: "StewardContext", character: "Character", content: str) -> None:
+    async def send_webhook_message(self, ctx: "StewardApplicationContext", character: "Character", content: str) -> None:
         webhook = await get_webhook(ctx.channel)
 
         kwargs = {
@@ -129,7 +129,7 @@ class Player(discord.Member):
 
         await webhook.send(**kwargs)
 
-    async def edit_webhook_message(self, ctx: "StewardContext", message_id: int, content: str) -> None:
+    async def edit_webhook_message(self, ctx: "StewardApplicationContext", message_id: int, content: str) -> None:
         webhook = await get_webhook(ctx.channel)
 
         kwargs = {

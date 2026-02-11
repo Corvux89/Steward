@@ -19,7 +19,7 @@ from Steward.utils.viewUitils import get_activity_select_option, get_character_h
 from constants import CHANNEL_BREAK, DENIED_EMOJI
 
 if TYPE_CHECKING:
-    from Steward.bot import StewardBot, StewardContext
+    from Steward.bot import StewardBot, StewardApplicationContext
 
 
 class BaseRequestView(StewardView):
@@ -29,7 +29,7 @@ class BaseRequestView(StewardView):
     ]
 
     bot: "StewardBot"
-    ctx: "StewardContext"
+    ctx: "StewardApplicationContext"
     request: Request
     player: Player
     character: Character
@@ -37,7 +37,7 @@ class BaseRequestView(StewardView):
         
 
 class Requestview(BaseRequestView):
-    def __init__(self, bot: "StewardBot", ctx: Union["StewardContext", discord.Interaction], player: Player, character: Character, **kwargs):
+    def __init__(self, bot: "StewardBot", ctx: Union["StewardApplicationContext", discord.Interaction], player: Player, character: Character, **kwargs):
         self.owner = ctx.user
         self.bot = bot
         self.ctx = ctx
@@ -415,4 +415,4 @@ class LoggedView(ui.DesignerView):
             ui.TextDisplay(f"-# {activity.name} logged by {log_user.display_name}")
         )
 
-        super().__init__(container)
+        super().__init__(container, store=False)
