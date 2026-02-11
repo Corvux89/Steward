@@ -9,7 +9,8 @@ from ..views import StewardView
 
 BREAK_CHEAK = [
     CHANNEL_BREAK,
-    CHANNEL_BREAK.replace(" ", "")
+    CHANNEL_BREAK.replace(" ", ""),
+    "```\n  \n```"    
 ]
 
 class CategoryDashboardView(StewardView):
@@ -52,10 +53,12 @@ class CategoryDashboardView(StewardView):
             self.unavailable = []
             for channel in self.dashboard.channels:
                 if last_message := await get_last_message_in_channel(channel):
-                    if last_message.content in BREAK_CHEAK:
+                    if last_message and last_message.content in BREAK_CHEAK:
                         self.available.append(channel)
-                    else:
+                    elif last_message:
                         self.unavailable.append(channel)
+                    else:
+                        self.available.append(channel)
 
 
         self.clear_items()
