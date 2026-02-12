@@ -368,14 +368,17 @@ def chunk_text(
 async def get_last_message_in_channel(channel: discord.TextChannel) -> discord.Message:
     last_message = None
 
+    # Check cache
     if not (last_message := channel.last_message):
         try:
+            # Channel history
             last_message = next(
                 (msg for msg in channel.history(limit=1)),
                 None
             )
         except:
             try:
+                # Fetch it (API Call)
                 last_message = await channel.fetch_message(channel.last_message_id)
             except:
                 pass

@@ -131,5 +131,6 @@ class CategoryDashboardView(StewardView):
 
         super().__init__(
             ui.TextDisplay("Loading...."),
-            store=False
+            store=False,
+            timeout=None
         )
