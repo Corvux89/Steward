@@ -58,7 +58,9 @@ class CategoryDashboard:
         if not self._message:        
             try:
                 self._message = await self.channel.fetch_message(self.message_id)
-            except discord.HTTPException:
+            except discord.HTTPException as e:
+                if e.code == 10008: # Deleted Message code
+                    return None
                 return True
             except:
                 return None
