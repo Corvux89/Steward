@@ -24,7 +24,7 @@ class LogDetailsModal(ui.DesignerModal):
         if self.activity and self.activity.allow_override == True:
             currency_input = ui.Label(
                 self.server.currency_label,
-                ui.TextInput(
+                ui.InputText(
                     custom_id="currency",
                     value=str(self.currency)
                 )
@@ -33,7 +33,7 @@ class LogDetailsModal(ui.DesignerModal):
 
             xp_input = ui.Label(
                 "XP",
-                ui.TextInput(
+                ui.InputText(
                     custom_id="xp",
                     value=str(self.xp)
                 )
@@ -42,7 +42,7 @@ class LogDetailsModal(ui.DesignerModal):
 
         notes_input = ui.Label(
             "Notes",
-            ui.TextInput(
+            ui.InputText(
                 style=discord.InputTextStyle.long,
                 required=False,
                 custom_id="notes",
