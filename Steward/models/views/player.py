@@ -209,7 +209,7 @@ class CharacterInfoView(BaseInfoView):
             container.add_item(currency_display)
 
         limited_currency_display = ui.TextDisplay(
-            f"**Limited {self.ctx.server.currency_str}**: {self.character.limited_currency:,}"
+            f"**Limited {self.ctx.server.currency_str}**: {self.character.limited_currency:,} / {self.ctx.server.currency_limit(self.player, self.character)}"
         )
 
         if self.staff:
@@ -241,7 +241,7 @@ class CharacterInfoView(BaseInfoView):
             container.add_item(xp_display)
 
         limited_xp_display = ui.TextDisplay(
-            f"**Limited XP**: {self.character.limited_xp:,}"
+            f"**Limited XP**: {self.character.limited_xp:,} / {self.ctx.server.xp_limit(self.player, self.character)}"
         )
 
         if self.staff:

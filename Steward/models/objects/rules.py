@@ -719,8 +719,11 @@ class StewardRule:
 
             if timestamp := embed_data.get('timestamp'):
                 try:
-                    timestamp = self._evaluate_template(timestamp, context)
-                    embed.timestamp = datetime.fromisoformat(timestamp)
+                    if isinstance(timestamp, bool) and timestamp == True:
+                        embed.timestamp = datetime.now(timezone.utc)
+                    else:
+                        timestamp = self._evaluate_template(timestamp, context)
+                        embed.timestamp = datetime.fromisoformat(timestamp)
                 except:
                     pass
         
