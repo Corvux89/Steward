@@ -117,10 +117,10 @@ class StewardLog:
         event = fields.String()
         character_id = fields.UUID(allow_none=True, required=False)
         activity_id = fields.UUID(allow_none=True, required=False)
-        original_currency = fields.Decimal()
-        currency = fields.Decimal()
-        original_xp = fields.Decimal()
-        xp = fields.Decimal()
+        original_currency = fields.Decimal(places=2)
+        currency = fields.Decimal(places=2)
+        original_xp = fields.Decimal(places=2)
+        xp = fields.Decimal(places=2)
         notes = fields.String(allow_none=True, required=False)
         invalid = fields.Boolean()
         created_ts = fields.DateTime("timestamp")
@@ -333,10 +333,10 @@ class StewardLog:
             activity_id=activity.id if activity else  None,
             character=character if character else None,
             notes=notes,
-            original_currency=original_currency,
-            currency=currency,
-            original_xp=original_xp,
-            xp=xp
+            original_currency=round(original_currency,2),
+            currency=round(currency,2),
+            original_xp=round(original_xp,2),
+            xp=round(xp,2)
         )
 
         if character:

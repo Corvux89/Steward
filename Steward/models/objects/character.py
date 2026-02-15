@@ -76,7 +76,7 @@ class Character:
         channels = fields.List(fields.Integer, allow_none=False)
         avatar_url = fields.String(allow_none=True)
         nickname = fields.String(allow_none=True)
-        currency = fields.Decimal(required=True, allow_none=False)
+        currency = fields.Decimal(required=True, allow_none=False, places=2)
         activity_points = fields.Integer(required=True)
         xp = fields.Integer(required=True)
         limited_xp = fields.Integer(required=True)
@@ -129,10 +129,10 @@ class Character:
             "channels": self.channels,
             "nickname": self.nickname,
             "activity_points": self.activity_points,
-            "xp": self.xp,
-            "currency": self.currency,
-            "limited_xp": self.limited_xp,
-            "limited_currency": self.limited_currency,
+            "xp": round(self.xp,2),
+            "currency": round(self.currency,2),
+            "limited_xp": round(self.limited_xp,2),
+            "limited_currency": round(self.limited_currency,2),
             "avatar_url": self.avatar_url
         }
 
