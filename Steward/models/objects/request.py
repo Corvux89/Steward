@@ -382,7 +382,7 @@ class Request:
                         bot,
                         author,
                         player,
-                        LogEvent.reward,
+                        LogEvent.activity,
                         character=character,
                         activity=activity,
                         notes=self.notes

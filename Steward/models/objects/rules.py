@@ -621,7 +621,7 @@ class StewardRule:
         from .enum import LogEvent
         from .player import Player
 
-        if hasattr(context, "patrol"):
+        if hasattr(context, "patrol") and context.patrol is not None:
             if "host_activity" in action or "host_currency" in action or "host_xp" in action:
                 await StewardLog.create(
                     bot,

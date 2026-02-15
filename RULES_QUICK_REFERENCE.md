@@ -60,6 +60,25 @@ A context object representing a completed patrol, available for rules with the `
   - `"XP: {log.xp if log else 0}"`
   - `"Adjusted GP: {log.currency:,}"`
 
+## Available Functions in Expressions
+
+Expressions can call the following built-in functions:
+
+- Core: `len()`, `max()`, `min()`, `sum()`, `any()`, `all()`, `abs()`, `round()`, `int()`, `float()`, `str()`, `bool()`, `enumerate()`, `range()`
+- Math/time: `floor()`, `ceil()`, `sqrt()`, `time()`
+- Attribute helper: `getattr(obj, attr, default='')`
+
+Custom Steward helpers:
+- `typeof(value)`: Returns the value's type name (e.g. `"int"`, `"SafePlayer"`).
+- `rand()`: Returns a random float in the range `[0.0, 1.0)`.
+- `randint(start, stop=None, step=1)`: Randomly selects from `range(start, stop, step)`.
+
+Examples:
+- `rand() < 0.1`
+- `randint(1, 7)`
+- `typeof(character.level) == 'int'`
+- `getattr(player, 'staff_points', 0) >= 10`
+
 ## Scheduling
 - `schedule_cron` supports standard 5-part cron: `minute hour day month day_of_week`.
 - Shortcuts (loose timing, run once per period): `@hourly`, `@daily`, `@midnight`, `@weekly`, `@monthly`, `@yearly`, `@annually`.
