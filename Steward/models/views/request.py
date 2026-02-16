@@ -283,7 +283,7 @@ class StaffRequestView(StewardView):
                 ui.TextDisplay(f"## Notes\n{self.request.notes}")
             )
 
-        activity_select = get_activity_select_option(self.request.server, self.activity, self._activity_select)
+        activity_select = get_activity_select_option(self.request.server, self.activity, self._activity_select, admin=True)
 
         # Approve Button
         approve_button = ui.Button(

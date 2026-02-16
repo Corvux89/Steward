@@ -1,10 +1,13 @@
 from typing import Optional, Type, Union
 import discord
 import discord.ui as ui
+import logging
 
 from Steward.models.embeds import ErrorEmbed
 from Steward.models.objects.player import Player
 from Steward.utils.discordUtils import try_delete
+
+log = logging.getLogger(__name__)
 
 class StewardView(ui.DesignerView):
     __copy_attrs__ = []
@@ -75,7 +78,10 @@ class StewardView(ui.DesignerView):
         return modal
 
     async def defer_to(self, view_type: Type["StewardView"], interaction: discord.Interaction, stop=True):
-        view = view_type.from_menu(self)
+        try:
+            view = view_type.from_menu(self)
+        except Exception as e:
+            log.error(e)
 
         if stop:
             self.stop()
