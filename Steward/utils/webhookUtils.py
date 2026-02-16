@@ -7,6 +7,7 @@ from Steward.utils.discordUtils import get_selection
 if TYPE_CHECKING:
     from Steward.models.objects.webhook import StewardWebhook
     from Steward.models.objects.character import Character
+    from Steward.models.objects.player import Player
 
 
 def find_character_by_name(name: str, characters: list["Character"]) -> list["Character"]:
@@ -98,3 +99,18 @@ def get_character_name(webhook: "StewardWebhook") -> str:
         return None
     
     return char_name
+
+async def get_reply_player(webhook: "StewardWebhook") -> "Player":
+    from Steward.models.objects.webhook import StewardWebhook
+
+    if (
+        webhook.message.reference.resolved
+        and webhook.message.reference.resolved.author.bot
+    ):
+        orig_webhook = StewardWebhook(
+            webhook.ctx,
+            message=webhook.message.reference.resolved
+        )
+
+        if await orig_webhook.is_valid_message(update_player=True):
+            return orig_webhook.player

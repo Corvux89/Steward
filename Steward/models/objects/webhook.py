@@ -12,7 +12,7 @@ from Steward.models.objects.npc import NPC
 from Steward.bot import StewardContext
 
 from Steward.utils.discordUtils import chunk_text, try_delete
-from Steward.utils.webhookUtils import get_character_name, get_player_name, handle_character_mentions
+from Steward.utils.webhookUtils import get_character_name, get_player_name, get_reply_player, handle_character_mentions
 
 log = logging.getLogger(__name__)
 
@@ -129,11 +129,27 @@ class StewardWebhook:
                     if len(chunk) >= self.ctx.server.activity_char_count_threshold:
                         reward_char = self.character or self.player.primary_character
                         await reward_char.update_activity_points(self.ctx)
-
+        
 
             except Exception as e:
+                await self.player.send(
+                    f"Error sending message in {self.ctx.channel.jump_url}. Try again."
+                )
+                await self.player.send(f"```{chunk}```")
                 log.error(e)
                 pass
+
+        if (
+            self.message.reference is not None
+            and (reply_player := await get_reply_player(self))
+        ):
+            try:
+                await reply_player.send(
+                    f"{self.ctx.author} replied to your message in:\n"
+                    f"{self.ctx.channel.jump_url}"
+                )
+            except Exception as e:
+                log.error(f"Error replying to message: {e}")
 
     async def edit(self, content: str) -> None:
         self.content = content

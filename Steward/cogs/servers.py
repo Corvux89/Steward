@@ -250,7 +250,7 @@ class ServerCog(commands.Cog):
                 
                     if value == '' or value is None:
                         value = None
-                    elif attr == 'max_level' or attr == 'activity_char_count_threshold':
+                    elif attr == 'max_level' or attr == 'activity_char_count_threshold' or attr == 'staff_role_id':
                         value = int(value)
                     elif attr == 'activity_excluded_channels':
                         value = [int(x.strip()) for x in value.strip('[]').split(',') if x.strip()]

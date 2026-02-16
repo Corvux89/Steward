@@ -73,6 +73,7 @@ class PatrolCog(commands.Cog):
         view = PatrolView(self.bot, patrol)
 
         message = await ctx.channel.send(view=view, allowed_mentions=discord.AllowedMentions(users=False, roles=False))
+        await message.pin()
         patrol.pinned_message_id = message.id
 
         await patrol.upsert()
@@ -141,6 +142,8 @@ class PatrolCog(commands.Cog):
         patrol.end_ts = datetime.now(timezone.utc)
         await patrol.upsert()
         self.bot.dispatch(RuleTrigger.patrol_complete.name, patrol)
+
+        await ctx.delete()
 
 
 

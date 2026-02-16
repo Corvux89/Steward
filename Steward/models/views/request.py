@@ -132,7 +132,6 @@ class Requestview(BaseRequestView):
             request = await Request.fetch(self.bot, self.request.staff_message_id)
             if request:
                 view = PlayerRequestView(self.bot, request=request)
-                await view.build_content()
                 try:
                     await  self.message.edit(view=view)
                 except:
@@ -162,7 +161,6 @@ class Requestview(BaseRequestView):
         if self.request.staff_message_id:
             request = await Request.fetch(self.bot, self.request.staff_message_id)
             view = PlayerRequestView(self.bot, request=request)
-            await view.build_content()
             
             if interaction.response.is_done():
                 await interaction.edit_original_message(view=view)
