@@ -45,18 +45,18 @@ class PatrolView(StewardView):
             )
         )
 
-        for character in self.patrol.characters:
+        for index, character in enumerate(self.patrol.characters):
             member = self.patrol.channel.guild.get_member(character.player_id)
             remove_button = ui.Button(
                 emoji= DENIED_EMOJI[0],
-                custom_id=str(character.id)
+                custom_id=f"remove_patrol:{character.id}:{index}"
             )
             remove_button.callback = self._remove_character
 
             container.add_item(
                 ui.Section(
                     ui.TextDisplay(
-                        f" - {character.name} ({member.mention})"
+                        f" - {character.name} - Level {character.level} ({member.mention})"
                     ),
                     accessory=remove_button
                 )
@@ -79,17 +79,21 @@ class PatrolView(StewardView):
         from .player import Player
         if interaction.user.id == self.patrol.host.id:
             await interaction.response.send_message("You are hosting this patrol", ephemeral=True)
+            return
         elif interaction.user.id in [c.player_id for c in self.patrol.characters]:
             await interaction.response.send_message("You are already in this patrol. Remove a character first", ephemeral=True)
+            return
         
         member = self.patrol.channel.guild.get_member(interaction.user.id)
         player = await Player.get_or_create(self.bot.db, member)
 
         if not player.active_characters:
             await interaction.response.send_message("You have no characters to join the patrol with", ephemeral=True)
+            return
 
         if len(player.active_characters) == 1:
-            self.patrol.characters.append(player.primary_character)
+            if player.primary_character.id not in [c.id for c in self.patrol.characters]:
+                self.patrol.characters.append(player.primary_character)
             await self.patrol.upsert()
         else:
             character = await get_character_select_modal(
@@ -98,13 +102,17 @@ class PatrolView(StewardView):
             )
 
             if character:
-                self.patrol.characters.append(character)
+                if character.id not in [c.id for c in self.patrol.characters]:
+                    self.patrol.characters.append(character)
                 await self.patrol.upsert()
         
         await self.refresh_content(interaction)
 
     async def _remove_character(self, interaction: discord.Interaction):
-        char = interaction.data.get('custom_id')
+        custom_id = interaction.data.get('custom_id', '')
+        _, _, char = custom_id.partition(':')
+        if ':' in char:
+            char, _, _ = char.partition(':')
         await interaction.response.defer()
 
         character = next(

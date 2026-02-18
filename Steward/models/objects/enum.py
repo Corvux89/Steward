@@ -49,6 +49,7 @@ class RuleTrigger(StewardEnum):
     new_request = "New Request"
     new_application = "New Application"
     patrol_complete = "Patrol Completed"
+    auction_complete = "Auction Complete"
 
 class PatrolOutcome(StewardEnum):
     extreme_clear = "Extreme Clear"
@@ -56,7 +57,3 @@ class PatrolOutcome(StewardEnum):
     half_clear = "Half Clear"
     failure = "Failure"
     incomplete = "Incomplete"
-
-class MarketType(StewardEnum):
-    auction = "Auction House"
-    shop = "Shop"

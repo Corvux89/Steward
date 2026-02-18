@@ -203,6 +203,8 @@ class CharacterCog(commands.Cog):
             
             if not character:
                 raise CharacterNotFound(ctx.player)
+            else:
+                char_obj=character
         
         # Check for existing draft application
         existing_app = await Application.fetch_draft(

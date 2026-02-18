@@ -988,7 +988,7 @@ class StewardRule:
             for i, chunk in enumerate(chunks):
                 if i == 0:
                     message = await webhook.send(
-                        username=application.player.display_name if application.template.character_specific == False else application.character.name,
+                        username=application.player.display_name if application.template.character_specific == False else application.character.name if application.character else application.player.display_name,
                         avatar_url=(
                             application.player.avatar.url if application.player.avatar else None if application.template.character_specific == False else application.character.avatar_url
                         ),
