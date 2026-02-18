@@ -34,24 +34,37 @@ def eval_with_player(expr: str, player, character=None, **extra_vars) -> Any:
 def eval_numeric(expr: str, context: AutomationContext = None, default: float = 0.0, **extra_vars) -> float:
     try:
         result = evaluate_expression(expr, context, **extra_vars)
+        # Handle None result
+        if result is None:
+            return default
+        # Try to convert to float
         return float(result)
-    except (StewardAutomationException, ValueError, TypeError):
+    except (StewardAutomationException, ValueError, TypeError) as e:
         return default
 
 
 def eval_int(expr: str, context: AutomationContext = None, default: int = 0, **extra_vars) -> int:
     try:
         result = evaluate_expression(expr, context, **extra_vars)
+        # Handle None result
+        if result is None:
+            return default
+        # Try to convert to int
         return int(result)
-    except (StewardAutomationException, ValueError, TypeError):
+    except (StewardAutomationException, ValueError, TypeError) as e:
         return default
 
 
 def eval_bool(expr: str, context: AutomationContext = None, default: bool = False, **extra_vars) -> bool:
     try:
         result = evaluate_expression(expr, context, **extra_vars)
+        # Handle None result
+        if result is None:
+            return default
         return bool(result)
-    except StewardAutomationException:
+    except StewardAutomationException as e:
+        return default
+    except Exception:
         return default
 
 

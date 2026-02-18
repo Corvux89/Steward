@@ -3,6 +3,7 @@ import discord
 
 from Steward.bot import StewardBot, StewardApplicationContext
 from Steward.models.objects.character import Character
+from Steward.models.objects.enum import RuleTrigger
 from Steward.models.objects.form import FormTemplate, Application
 from Steward.models.objects.player import Player
 from Steward.models.views import StewardView
@@ -168,7 +169,7 @@ class FormView(BasicFormView):
         self.application = await self.application.upsert()
         
         # Dispatch event 
-        self.bot.dispatch("new_application", self.application)
+        self.bot.dispatch(RuleTrigger.new_application.namej, self.application)
         
         await interaction.response.send_message(
             "✅ Form submitted successfully!",

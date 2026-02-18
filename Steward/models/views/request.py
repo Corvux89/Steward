@@ -8,7 +8,7 @@ from Steward.models.embeds import ErrorEmbed
 from Steward.models.modals import PromptModal
 from Steward.models.objects.activity import Activity
 from Steward.models.objects.character import Character
-from Steward.models.objects.enum import LogEvent
+from Steward.models.objects.enum import LogEvent, RuleTrigger
 from Steward.models.objects.exceptions import StewardError
 from Steward.models.objects.log import StewardLog
 from Steward.models.objects.player import Player
@@ -228,7 +228,7 @@ class Requestview(BaseRequestView):
             await interaction.response.edit_message(view=view)
 
         
-        self.bot.dispatch("new_request", self.request)
+        self.bot.dispatch(RuleTrigger.new_request.name, self.request)
 
     async def _remove_character(self, interaction: discord.Interaction):
         char_id = interaction.data["custom_id"][7:]

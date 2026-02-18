@@ -592,7 +592,7 @@ class StewardRule:
             return StewardRule(self.db, **data)
     
     @staticmethod
-    async def fetch(db: AsyncEngine, guild_id: int, **kwargs):
+    async def fetch(db: AsyncEngine, guild_id: int, **kwargs) -> "StewardRule":
         id = kwargs.get('id')
         if id and isinstance(id, str):
             id = uuid.UUID(id)
@@ -792,13 +792,24 @@ class StewardRule:
             results.append({'type': self.trigger.name, 'success': False, 'error': f'Improper context/trigger'})
             return
         
+        if not hasattr(context, "player") or context.player is None:
+            results.append({'type': self.trigger.name, 'success': False, 'error': f'Player not found in context'})
+            return
+        
         if context.player.bot:
-            results.append({'type': self.trigger.name, 'success': False, 'error': f'Can\'t do this for a  a bot'})
+            results.append({'type': self.trigger.name, 'success': False, 'error': f'Can\'t do this for a bot'})
             return
         
         value_expr = str(action.get('value', 0))
 
-        amount = eval_int(value_expr, context)
+        try:
+            amount = eval_int(value_expr, context)
+        except Exception as e:
+            results.append({'type': self.trigger.name, 'success': False, 'error': f'Failed to evaluate staff points value: {str(e)}'})
+            return
+
+        if amount is None:
+            amount = 0
 
         context.player.staff_points = max(context.player.staff_points+amount, 0)
 
