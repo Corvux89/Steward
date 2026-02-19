@@ -113,7 +113,7 @@ class PatrolView(StewardView):
         _, _, char = custom_id.partition(':')
         if ':' in char:
             char, _, _ = char.partition(':')
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
 
         character = next(
             (c for c in self.patrol.characters if str(c.id) == char),
@@ -121,9 +121,11 @@ class PatrolView(StewardView):
         )
 
         if not character:
-            await interaction.response.send_message("Character not found", ephemeral=True)
-        elif interaction.user.id not in [self.patrol.host.id, character.player_id] or not is_admin(interaction):
-            await interaction.response.send_message("You cannot remove this character", ephemeral=True)
+            await interaction.channel.send("Character not found")
+            return
+        elif not (interaction.user.id in [self.patrol.host.id, character.player_id] or is_admin(interaction)):
+            await interaction.channel.send("You cannot remove this character")
+            return
 
         if await confirm_view(
             interaction,
