@@ -548,7 +548,7 @@ class CharacterInfoView(BaseInfoView):
             notes=notes
         )
 
-        await self.bot.dispatch(RuleTrigger.level_up.name, interaction, self.character, log)
+        self.bot.dispatch(RuleTrigger.level_up.name, interaction, self.character, log)
 
         await self.refresh_content(interaction)
 

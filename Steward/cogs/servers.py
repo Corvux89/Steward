@@ -926,6 +926,9 @@ class ServerCog(commands.Cog):
                 item = None
                 if incoming_id:
                     item = existing_items_by_id.get(str(incoming_id))
+                    # Validate that the item belongs to this house (which belongs to this guild)
+                    if item and item.house_id != refreshed_house.id:
+                        raise StewardError(f"Item ID {incoming_id} does not belong to auction house '{refreshed_house.name}'.")
                 if not item:
                     item = existing_items_by_name.get(incoming_name.lower())
 
@@ -992,6 +995,9 @@ class ServerCog(commands.Cog):
                 shelf = None
                 if incoming_id:
                     shelf = existing_shelves_by_id.get(str(incoming_id))
+                    # Validate that the shelf belongs to this house (which belongs to this guild)
+                    if shelf and shelf.house_id != refreshed_house.id:
+                        raise StewardError(f"Shelf ID {incoming_id} does not belong to auction house '{refreshed_house.name}'.")
                 if not shelf:
                     shelf = existing_shelves_by_priority.get(incoming_priority)
 
