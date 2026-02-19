@@ -34,7 +34,7 @@ class Item:
         "ref_items",
         metadata,
         sa.Column("id", sa.UUID, primary_key=True, default=uuid.uuid4),
-        sa.Column("house_id", sa.UUID, sa.ForeignKey("ref_markets.id"), nullable=False),
+        sa.Column("house_id", sa.UUID, sa.ForeignKey("ref_auction_houses.id"), nullable=False),
         sa.Column("name", sa.String(), nullable=False),
         sa.Column("description", sa.String(), nullable=True),
         sa.Column("cost", sa.Float, nullable=False, default=0),
@@ -657,10 +657,9 @@ class AuctionHouse:
         return market
 
     @staticmethod
-    async def fetch_all(bot: "StewardBot", guild_id: int, load_related: bool = True) -> list["AuctionHouse"]:
+    async def fetch_all(bot: "StewardBot", load_related: bool = True) -> list["AuctionHouse"]:
         query = (
             AuctionHouse.market_table.select()
-            .where(AuctionHouse.market_table.c.guild_id == guild_id)
             .order_by(AuctionHouse.market_table.c.name)
         )
 
@@ -774,7 +773,20 @@ class AuctionHouse:
             self._bot.dispatch(RuleTrigger.auction_complete.name, item, winner, winning_bid, bids, reason)
         await inventory_item.delete()
 
-        #TODO: Refresh view
+        await self.refresh_view()
+
+    async def refresh_view(self):
+        from ..views.auctionHouse import AuctionHouseView
+
+        if not self.message_id:
+            return
+        
+        view = AuctionHouseView(self)
+
+        message = await self.channel.fetch_message(self.message_id)
+
+        if message:
+            await message.edit(view=view)
     
             
 

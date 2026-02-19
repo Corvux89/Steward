@@ -1,0 +1,7 @@
+"Name","Verb","Admin Only","Currency Reward Expression","XP Reward Expression","Limited/Capped?","Allow value overrides?","Inverse override?","Active"
+"Buy",,False,"0","0",False,True,True,True
+"Patrol",,True,"server.currency_limit(player,character)*0.3","server.xp_limit(player,character)*0.3",True,False,False,True
+"Quest",,True,"server.currency_limit(player,character)*2","server.xp_limit(player,character)*2",False,False,False,True
+"RP","Graded",True,"server.currency_limit(player, character)*0.4","server.xp_limit(player, character)*0.4",True,False,False,True
+"Sell",,False,"0","0",False,True,False,True
+Tall Tale,Graded,True,"server.currency_limit(player, character)*0.4","server.xp_limit(player, character)*0.4",True,False,False,True

@@ -7,7 +7,7 @@ import discord.ui as ui
 from discord.ext import commands, tasks
 
 from Steward.bot import StewardApplicationContext, StewardBot
-from Steward.models.objects.auctionhouse import InventoryItem, Market
+from Steward.models.objects.auctionHouse import InventoryItem, Market
 from Steward.models.objects.player import Player
 from Steward.utils.discordUtils import is_admin
 

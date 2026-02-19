@@ -169,7 +169,7 @@ class FormView(BasicFormView):
         self.application = await self.application.upsert()
         
         # Dispatch event 
-        self.bot.dispatch(RuleTrigger.new_application.namej, self.application)
+        self.bot.dispatch(RuleTrigger.new_application.name, self.application)
         
         await interaction.response.send_message(
             "✅ Form submitted successfully!",

@@ -127,3 +127,22 @@ class Activity:
         activity = Activity.ActivitySchema(db).load(dict(row._mapping))
 
         return activity
+    
+    @staticmethod
+    async def fetch_by_guild(db: AsyncEngine, guild_id: int, active_only: bool = True) -> list["Activity"]:
+        """Fetch all activities for a guild - optimized for autocomplete"""
+        from Steward.utils.dbUtils import QueryResultType
+        
+        query = Activity.activity_table.select().where(
+            Activity.activity_table.c.guild_id == guild_id
+        )
+        
+        if active_only:
+            query = query.where(Activity.activity_table.c.active == True)
+        
+        rows = await execute_query(db, query, QueryResultType.multiple)
+        
+        if not rows:
+            return []
+        
+        return [Activity.ActivitySchema(db).load(dict(row._mapping)) for row in rows]

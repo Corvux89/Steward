@@ -295,7 +295,10 @@ class StewardLog:
 
         # Type Conversions
         currency = Decimal(currency)
-        xp = int(xp)
+        try:
+            xp = int(xp)
+        except:
+            xp = 0
 
         if (xp > 0 or currency > 0) and not character:
             raise StewardError(
