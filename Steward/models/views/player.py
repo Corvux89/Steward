@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 import logging
 import discord
 import discord.ui as ui
@@ -7,6 +8,7 @@ from Steward.models.modals.player import NewCharacterModal, PlayerInformationMod
 from Steward.models.modals import get_value_modal
 from Steward.models.objects.character import Character
 from Steward.models.objects.enum import ApplicationType, LogEvent, RuleTrigger
+from Steward.models.objects.exceptions import StewardError
 from Steward.models.objects.log import StewardLog
 from Steward.models.objects.player import Player
 from Steward.models.views import StewardView, confirm_view
@@ -55,6 +57,468 @@ class BaseInfoView(StewardView):
                 await try_delete(message)
 
 
+class PlayerLogSearchView(StewardView):
+    __copy_attrs__ = [
+        "owner", "bot", "ctx", "player", "staff", "admin", "delete_on_timeout",
+        "logs", "page_index", "character_filter", "event_filter", "activity_filter",
+        "date_start", "date_end", "log_limit"
+    ]
+
+    def __init__(self, bot: StewardBot, ctx, player: Player, **kwargs):
+        self.owner = kwargs.get("owner", ctx.author)
+        self.bot = bot
+        self.ctx = ctx
+        self.player = player
+        self.staff = kwargs.get("staff", False)
+        self.admin = kwargs.get("admin", False)
+        self.delete_on_timeout = kwargs.get("delete", kwargs.get("delete_on_timeout", False))
+
+        self.logs: list[StewardLog] = kwargs.get("logs", [])
+        self.page_index = kwargs.get("page_index", 0)
+        self.log_limit = kwargs.get("log_limit", 150)
+        self.log_limit_step = 75
+        self.max_log_limit = 500
+
+        self.character_filter = kwargs.get("character_filter")
+        self.event_filter = kwargs.get("event_filter")
+        self.activity_filter = kwargs.get("activity_filter")
+        self.date_start = kwargs.get("date_start")
+        self.date_end = kwargs.get("date_end")
+
+        content = self._build_content()
+        super().__init__(*content)
+
+    @property
+    def total_pages(self) -> int:
+        return 1 + len(self.logs)
+
+    @property
+    def current_log(self) -> StewardLog | None:
+        if self.page_index == 0:
+            return None
+        index = self.page_index - 1
+        if index < 0 or index >= len(self.logs):
+            return None
+        return self.logs[index]
+
+    async def load_logs(self):
+        activity_id = None
+        if self.activity_filter:
+            activity = self.ctx.server.get_activity(self.activity_filter)
+            if activity:
+                activity_id = activity.id
+
+        self.logs = await StewardLog.fetch_all(
+            self.bot,
+            self.ctx.server.id,
+            player_id=self.player.id,
+            character_id=self.character_filter,
+            event=self.event_filter,
+            activity_id=activity_id,
+            start_ts=self.date_start,
+            end_ts=self.date_end,
+            limit=self.log_limit,
+            hydrate=False
+        )
+
+        if self.page_index >= self.total_pages:
+            self.page_index = max(self.total_pages - 1, 0)
+
+    def _build_content(self) -> list:
+        container = ui.Container(
+            get_player_header(self.player),
+            ui.Separator(),
+            ui.TextDisplay(self._page_text())
+        )
+
+        rows = []
+
+        previous_button = ui.Button(
+            label="Previous",
+            style=discord.ButtonStyle.secondary,
+            disabled=self.total_pages <= 1
+        )
+        previous_button.callback = self._on_previous
+
+        next_button = ui.Button(
+            label="Next",
+            style=discord.ButtonStyle.secondary,
+            disabled=self.total_pages <= 1
+        )
+        next_button.callback = self._on_next
+
+        refresh_button = ui.Button(
+            label="Refresh",
+            style=discord.ButtonStyle.blurple
+        )
+        refresh_button.callback = self._on_refresh
+
+        clear_button = ui.Button(
+            label="Reset",
+            style=discord.ButtonStyle.red
+        )
+        clear_button.callback = self._on_clear_filters
+
+        event_button = ui.Button(
+            label="Event Filter",
+            style=discord.ButtonStyle.secondary
+        )
+        event_button.callback = self._on_event_filter
+
+        character_button = ui.Button(
+            label="Character Filter",
+            style=discord.ButtonStyle.secondary
+        )
+        character_button.callback = self._on_character_filter
+
+        date_button = ui.Button(
+            label="Date Filter",
+            style=discord.ButtonStyle.secondary
+        )
+        date_button.callback = self._on_date_filter
+
+        activity_button = ui.Button(
+            label="Activity Filter",
+            style=discord.ButtonStyle.secondary
+        )
+        activity_button.callback = self._on_activity_filter
+
+        load_more_button = ui.Button(
+            label=f"Load More ({self.log_limit})",
+            style=discord.ButtonStyle.blurple,
+            disabled=True if not self._can_load_more() else False
+        )
+        load_more_button.callback = self._on_load_more
+
+        back_button = ui.Button(
+            label="Back"
+        )
+        back_button.callback = self._on_back
+
+        return [
+            container,
+            ui.ActionRow(previous_button, next_button, refresh_button, clear_button, load_more_button),
+            ui.ActionRow(character_button, date_button, activity_button, event_button, back_button)
+        ]
+
+    def _can_load_more(self) -> bool:
+        return self.log_limit < self.max_log_limit and len(self.logs) >= self.log_limit
+
+    def _parse_date(self, value: str, end_of_day: bool = False) -> datetime | None:
+        if not value:
+            return None
+
+        cleaned = value.strip()
+        if cleaned == "":
+            return None
+
+        try:
+            parsed = datetime.fromisoformat(cleaned)
+        except ValueError:
+            try:
+                parsed = datetime.strptime(cleaned, "%Y-%m-%d")
+            except ValueError:
+                return None
+
+        if parsed.tzinfo is None:
+            if end_of_day and len(cleaned) == 10:
+                parsed = parsed.replace(hour=23, minute=59, second=59)
+            parsed = parsed.replace(tzinfo=timezone.utc)
+
+        return parsed
+
+    def _date_label(self, value: datetime | None) -> str:
+        if not value:
+            return "All"
+        return value.strftime("%Y-%m-%d")
+
+    def _event_label(self) -> str:
+        if not self.event_filter:
+            return "All"
+
+        try:
+            return LogEvent.from_string(self.event_filter).value
+        except Exception:
+            return self.event_filter
+
+    def _character_label(self) -> str:
+        if not self.character_filter:
+            return "All"
+
+        character = next(
+            (char for char in self.player.characters if str(char.id) == str(self.character_filter)),
+            None
+        )
+        return character.name if character else str(self.character_filter)
+
+    def _activity_label(self) -> str:
+        if not self.activity_filter:
+            return "All"
+        return self.activity_filter
+
+    def _summary_text(self) -> str:
+        event_counts: dict[str, int] = {}
+        activity_counts: dict[str, int] = {}
+        activity_total = 0
+        currency_total = 0
+        xp_total = 0
+
+        activity_name_map = {
+            str(activity.id): activity.name
+            for activity in self.ctx.server.activities
+        }
+
+        for entry in self.logs:
+            event_counts[entry.event.value] = event_counts.get(entry.event.value, 0) + 1
+
+            if entry.activity or entry.activity_id:
+                activity_total += 1
+
+                if entry.activity:
+                    activity_name = entry.activity.name
+                elif entry.activity_id:
+                    activity_name = activity_name_map.get(str(entry.activity_id), "Unknown Activity")
+                else:
+                    activity_name = "Unknown Activity"
+
+                activity_counts[activity_name] = activity_counts.get(activity_name, 0) + 1
+
+            currency_total += float(entry.currency)
+            xp_total += float(entry.xp)
+
+        activity_breakdown = sorted(activity_counts.items(), key=lambda item: item[1], reverse=True)
+        activity_breakdown_str = "\n".join(f"- {name}: {count}" for name, count in activity_breakdown[:8]) if activity_breakdown else "- None"
+
+        return (
+            f"## Player Log Summary\n"
+            f"**Page**: 1 / {self.total_pages}\n"
+            f"**Logs Found**: {len(self.logs)}\n"
+            f"**Filters**:\n"
+            f"- Character: {self._character_label()}\n"
+            f"- Date: {self._date_label(self.date_start)} to {self._date_label(self.date_end)}\n"
+            f"- Event: {self._event_label()}\n"
+            f"- Activity: {self._activity_label()}\n\n"
+            f"**Totals**:\n"
+            f"- Activity Logs: {activity_total}\n"
+            f"- Currency Delta: {currency_total:,.2f}\n"
+            f"- XP Delta: {xp_total:,.2f}\n\n"
+            f"**Activity Breakdown**:\n{activity_breakdown_str}"
+        )
+
+    def _log_text(self, entry: StewardLog) -> str:
+        character_name = "None"
+        if entry.character:
+            character_name = entry.character.name
+        elif entry.character_id:
+            character = next(
+                (char for char in self.player.characters if str(char.id) == str(entry.character_id)),
+                None
+            )
+            if character:
+                character_name = character.name
+
+        activity_name = "None"
+        if entry.activity:
+            activity_name = entry.activity.name
+        elif entry.activity_id:
+            activity = next(
+                (act for act in self.ctx.server.activities if str(act.id) == str(entry.activity_id)),
+                None
+            )
+            if activity:
+                activity_name = activity.name
+
+        author_mention = entry.author.mention if entry.author else f"<@{entry.author_id}>"
+        notes = entry.notes or "None"
+
+        if len(notes) > 1500:
+            notes = f"{notes[:1500]}..."
+
+        return (
+            f"## Log Entry\n"
+            f"**Page**: {self.page_index + 1} / {self.total_pages}\n"
+            f"**Created**: <t:{entry.epoch_time}:F>\n"
+            f"**Event**: {entry.event.value}\n"
+            f"**Author**: {author_mention}\n"
+            f"**Character**: {character_name}\n"
+            f"**Activity**: {activity_name}\n"
+            f"**Original Currency**: {entry.original_currency:,.2f}\n"
+            f"**Currency**: {entry.currency:,.2f}\n"
+            f"**Original XP**: {entry.original_xp:,.2f}\n"
+            f"**XP**: {entry.xp:,.2f}\n"
+            f"**Invalid**: {'Yes' if entry.invalid else 'No'}\n"
+            f"**Notes**:\n{notes}"
+        )
+
+    def _page_text(self) -> str:
+        if self.page_index == 0:
+            return self._summary_text()
+
+        entry = self.current_log
+        if not entry:
+            return self._summary_text()
+
+        return self._log_text(entry)
+
+    async def _refresh_with_reload(self, interaction: discord.Interaction):
+        await self.load_logs()
+        await self.refresh_content(interaction)
+
+    async def _on_previous(self, interaction: discord.Interaction):
+        self.page_index = (self.page_index - 1) % self.total_pages
+        await self.refresh_content(interaction)
+
+    async def _on_next(self, interaction: discord.Interaction):
+        self.page_index = (self.page_index + 1) % self.total_pages
+        await self.refresh_content(interaction)
+
+    async def _on_refresh(self, interaction: discord.Interaction):
+        if not interaction.response.is_done():
+            await interaction.response.defer()
+
+        await self._refresh_with_reload(interaction)
+
+    async def _on_clear_filters(self, interaction: discord.Interaction):
+        if not interaction.response.is_done():
+            await interaction.response.defer()
+
+        self.character_filter = None
+        self.event_filter = None
+        self.activity_filter = None
+        self.date_start = None
+        self.date_end = None
+        self.page_index = 0
+        await self._refresh_with_reload(interaction)
+
+    async def _on_event_filter(self, interaction: discord.Interaction):
+        items = ["All", *[event.value for event in LogEvent]]
+        selected = await get_value_modal(
+            interaction,
+            "Event",
+            self._event_label(),
+            "Filter: Event",
+            items=items,
+            required=False
+        )
+
+        if selected is None:
+            return
+
+        if selected == "All":
+            self.event_filter = None
+        else:
+            selected_event = next((event for event in LogEvent if event.value == selected), None)
+            self.event_filter = selected_event.name if selected_event else None
+
+        self.page_index = 0
+        await self._refresh_with_reload(interaction)
+
+    async def _on_character_filter(self, interaction: discord.Interaction):
+        character_labels = ["All"]
+        label_map = {}
+
+        for character in self.player.characters[:24]:
+            label = f"{character.name} ({str(character.id)[:8]}){' - Inactive' if character.active == False else ''}"
+            character_labels.append(label)
+            label_map[label] = str(character.id)
+
+        selected = await get_value_modal(
+            interaction,
+            "Character",
+            self._character_label(),
+            "Filter: Character",
+            items=character_labels,
+            required=False
+        )
+
+        if selected is None:
+            return
+
+        if selected == "All":
+            self.character_filter = None
+        else:
+            self.character_filter = label_map.get(selected)
+
+        self.page_index = 0
+        await self._refresh_with_reload(interaction)
+
+    async def _on_date_filter(self, interaction: discord.Interaction):
+        start_value = await get_value_modal(
+            interaction,
+            "Start Date (YYYY-MM-DD)",
+            self._date_label(self.date_start) if self.date_start else "",
+            "Filter: Start Date",
+            required=False
+        )
+
+        if start_value is None:
+            return
+
+        end_value = await get_value_modal(
+            interaction,
+            "End Date (YYYY-MM-DD)",
+            self._date_label(self.date_end) if self.date_end else "",
+            "Filter: End Date",
+            required=False
+        )
+
+        if end_value is None:
+            return
+
+        start_ts = self._parse_date(start_value, end_of_day=False)
+        end_ts = self._parse_date(end_value, end_of_day=True)
+
+        if start_value and not start_ts:
+            raise StewardError("Invalid start date. Use YYYY-MM-DD or ISO format.")
+        if end_value and not end_ts:
+            raise StewardError("Invalid end date. Use YYYY-MM-DD or ISO format.")
+        if start_ts and end_ts and start_ts > end_ts:
+            raise StewardError("Start date cannot be after end date.")
+
+        self.date_start = start_ts
+        self.date_end = end_ts
+        self.page_index = 0
+        await self._refresh_with_reload(interaction)
+
+    async def _on_activity_filter(self, interaction: discord.Interaction):
+        options = ["All", *[activity.name for activity in self.ctx.server.activities[:24]]]
+        selected = await get_value_modal(
+            interaction,
+            "Activity",
+            self._activity_label() if self.activity_filter else "",
+            "Filter: Activity",
+            items=options,
+            required=False
+        )
+
+        if selected is None:
+            return
+
+        if selected == "All":
+            self.activity_filter = None
+        else:
+            self.activity_filter = selected
+
+        self.page_index = 0
+        await self._refresh_with_reload(interaction)
+
+    async def _on_load_more(self, interaction: discord.Interaction):
+        if not interaction.response.is_done():
+            await interaction.response.defer()
+
+        next_limit = min(self.log_limit + self.log_limit_step, self.max_log_limit)
+        if next_limit == self.log_limit:
+            return await self.refresh_content(interaction)
+
+        self.log_limit = next_limit
+        await self._refresh_with_reload(interaction)
+
+    async def _on_back(self, interaction: discord.Interaction):
+        from Steward.models.views.player import PlayerInfoView
+
+        await self.defer_to(PlayerInfoView, interaction)
+
+
 class PlayerInfoView(BaseInfoView):
     def __init__(self, bot: StewardBot, ctx: StewardApplicationContext, player: Player, **kwargs):
         self.owner = ctx.author
@@ -98,6 +562,14 @@ class PlayerInfoView(BaseInfoView):
             new_character_button.callback = self._on_new_character_button
             row_1_buttons.append(new_character_button)
 
+            player_logs_button = ui.Button(
+                label="Player Logs",
+                style=discord.ButtonStyle.blurple,
+                custom_id="player_logs"
+            )
+            player_logs_button.callback = self._on_player_logs_button
+            row_1_buttons.append(player_logs_button)
+
             exit_button = ui.Button(
                 label="Quit",
                 style=discord.ButtonStyle.red
@@ -132,6 +604,17 @@ class PlayerInfoView(BaseInfoView):
 
     async def _on_new_character_button(self, interaction: discord.Interaction):
         await self.defer_to(NewCharacterView, interaction)
+
+    async def _on_player_logs_button(self, interaction: discord.Interaction):
+        if not interaction.response.is_done():
+            await interaction.response.defer()
+
+        view = PlayerLogSearchView.from_menu(self)
+        await view.load_logs()
+
+        view = PlayerLogSearchView.from_menu(view)
+
+        await interaction.edit_original_message(view=view)
 
 class CharacterInfoView(BaseInfoView):
     def __init__(self, bot: StewardBot, ctx: StewardApplicationContext, player: Player, character: Character, **kwargs):

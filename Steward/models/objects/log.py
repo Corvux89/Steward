@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from Steward.models.automation.utils import eval_numeric
 from ..automation.context import AutomationContext
 from Steward.models.objects.activity import Activity
-from Steward.models.objects.enum import LogEvent, RuleTrigger
+from Steward.models.objects.enum import LogEvent, QueryResultType, RuleTrigger
 from Steward.models import metadata
 from Steward.models.objects.exceptions import StewardError, TransactionError
 from Steward.utils.dbUtils import execute_query
@@ -202,6 +202,81 @@ class StewardLog:
         log = await StewardLog._make_log_whole(bot, data)
 
         return log
+
+    @staticmethod
+    async def fetch_all(
+        bot: "StewardBot",
+        guild_id: int,
+        player_id: int = None,
+        **kwargs
+    ) -> list["StewardLog"]:
+        """Fetch logs with optional filters, ordered newest-first."""
+        conditions = [
+            StewardLog.log_table.c.guild_id == guild_id
+        ]
+
+        if player_id is not None:
+            conditions.append(StewardLog.log_table.c.player_id == player_id)
+
+        character_id = kwargs.get("character_id")
+        if character_id:
+            if isinstance(character_id, str):
+                character_id = uuid.UUID(character_id)
+            conditions.append(StewardLog.log_table.c.character_id == character_id)
+
+        event = kwargs.get("event")
+        if event:
+            if isinstance(event, LogEvent):
+                event = event.name
+            conditions.append(StewardLog.log_table.c.event == str(event).lower())
+
+        activity_id = kwargs.get("activity_id")
+        if activity_id:
+            if isinstance(activity_id, str):
+                activity_id = uuid.UUID(activity_id)
+            conditions.append(StewardLog.log_table.c.activity_id == activity_id)
+
+        start_ts: datetime = kwargs.get("start_ts")
+        if start_ts:
+            conditions.append(StewardLog.log_table.c.created_ts >= start_ts)
+
+        end_ts: datetime = kwargs.get("end_ts")
+        if end_ts:
+            conditions.append(StewardLog.log_table.c.created_ts <= end_ts)
+
+        include_invalid = kwargs.get("include_invalid", True)
+        if not include_invalid:
+            conditions.append(StewardLog.log_table.c.invalid == False)
+
+        limit = kwargs.get("limit", 200)
+        hydrate = kwargs.get("hydrate", True)
+
+        query = (
+            StewardLog.log_table.select()
+            .where(sa.and_(*conditions))
+            .order_by(StewardLog.log_table.c.created_ts.desc())
+            .limit(limit)
+        )
+
+        rows = await execute_query(bot.db, query, QueryResultType.multiple)
+
+        if not rows:
+            return []
+
+        if not isinstance(rows, list):
+            rows = [rows]
+
+        logs: list[StewardLog] = []
+        for row in rows:
+            data = StewardLog.StewardLogSchema().load(dict(row._mapping))
+            if hydrate:
+                logs.append(await StewardLog._make_log_whole(bot, data))
+            else:
+                log = StewardLog(bot, **data)
+                log.event = LogEvent.from_string(log.event)
+                logs.append(log)
+
+        return logs
 
     @staticmethod
     async def _make_log_whole(bot: "StewardBot", data):
