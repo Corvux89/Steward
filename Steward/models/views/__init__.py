@@ -85,11 +85,13 @@ class StewardView(ui.DesignerView):
 
         if stop:
             self.stop()
-
-        if interaction.response.is_done():
-            await interaction.edit_original_message(view=view)
-        else:
-            await interaction.response.edit_message(view=view)
+        try:
+            if interaction.response.is_done():
+                await interaction.edit_original_message(view=view)
+            else:
+                await interaction.response.edit_message(view=view)
+        except Exception as e:
+            log.error(e)
 
 
     def _extract_text_from_section(self, section: ui.Section) -> ui.TextDisplay | None:
