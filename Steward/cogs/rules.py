@@ -6,6 +6,7 @@ from discord.ext import commands, tasks
 
 from Steward.bot import StewardBot
 from Steward.models.automation.context import AutomationContext
+from Steward.models.objects.auctionHouse import Item
 from Steward.models.objects.form import Application
 from Steward.models.objects.character import Character
 from Steward.models.objects.enum import RuleTrigger
@@ -121,6 +122,10 @@ class RulesCog(commands.Cog):
         rules = await execute_rules_for_trigger(self.bot, server, RuleTrigger.patrol_complete.name, patrol=patrol)
 
         log.info(rules)
+
+    @commands.Cog.listener()
+    async def on_auction_complete(self, item: Item, winner: Player, winning_bid: float, bids: list[tuple[Character, float]], reason: str):
+        pass
 
     # Scheduled Rules Stuff
     @commands.Cog.listener()

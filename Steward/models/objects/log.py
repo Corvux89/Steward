@@ -315,16 +315,22 @@ class StewardLog:
                 f"{character.name} // {player.display_name} cannot drop below `0` xp"
             )
         
+        applied_xp = xp
+
         # Updates
         if character:
             character.currency += currency
-            
-            if server.xp_global_limit_expr and server.xp_global_limit_expr != "":
-                character.xp += min(xp,server.xp_global_limit(player, character))
+
+            if server.xp_global_limit_expr and server.xp_global_limit_expr != "" and applied_xp > 0:
+                limit = int(server.xp_global_limit(player, character))
+                remaining_to_limit = max(0, limit - int(character.xp))
+                applied_xp = min(applied_xp, remaining_to_limit)
+
+            character.xp += applied_xp
 
             if activity and activity.limited:
                 character.limited_currency += currency
-                character.limited_xp += xp
+                character.limited_xp += applied_xp
 
 
         log_entry = StewardLog(
@@ -339,7 +345,7 @@ class StewardLog:
             original_currency=round(original_currency,2),
             currency=round(currency,2),
             original_xp=round(original_xp,2),
-            xp=round(xp,2)
+            xp=round(applied_xp,2)
         )
 
         if character:

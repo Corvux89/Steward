@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import random
 from typing import TYPE_CHECKING, Optional, Union
 import sqlalchemy as sa
 import uuid
@@ -6,7 +7,7 @@ import uuid
 from marshmallow import Schema, fields, post_load
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from Steward.models.objects.enum import QueryResultType, RuleTrigger
+from Steward.models.objects.enum import LogEvent, QueryResultType, RuleTrigger
 
 from .. import metadata
 from ...utils.dbUtils import execute_query
@@ -287,7 +288,7 @@ class StockItem:
         self.item_id = kwargs.get("item_id")
         self.shelf_id = kwargs.get("shelf_id")
         self.bids: dict["Character", int] = kwargs.get("bids", {})
-        self.auction_start = kwargs.get("auction_start", datetime.now(timezone.utc))
+        self.auction_start = kwargs.get("auction_start")
 
         self.item: Optional["Item"] = kwargs.get("item")
         self.shelf: Optional["Shelf"] = kwargs.get("shelf")
@@ -298,7 +299,7 @@ class StockItem:
         sa.Column("id", sa.UUID, primary_key=True, default=uuid.uuid4),
         sa.Column("item_id", sa.UUID, sa.ForeignKey("ref_items.id"), nullable=False),
         sa.Column("shelf_id", sa.UUID, sa.ForeignKey("ref_shelves.id"), nullable=False),
-        sa.Column("auction_start", sa.TIMESTAMP(timezone=True), nullable=False)
+        sa.Column("auction_start", sa.TIMESTAMP(timezone=True), nullable=True)
     )
 
     class InventoryItemSchema(Schema):
@@ -398,7 +399,15 @@ class StockItem:
         await execute_query(self._db, delete_query, QueryResultType.none)
 
         if not bids:
+            # Null out auction_start if no bids
+            update_query = (
+                self.inventory_item_table.update()
+                .where(self.inventory_item_table.c.id == self.id)
+                .values(auction_start=None)
+            )
+            await execute_query(self._db, update_query, QueryResultType.none)
             self.bids = {}
+            self.auction_start = None
             return
 
         normalized = []
@@ -424,6 +433,17 @@ class StockItem:
             hydrated[character] = int(bid)
 
         if normalized:
+            update_query = (
+                self.inventory_item_table.update()
+                .where(self.inventory_item_table.c.id == self.id)
+                .where(self.inventory_item_table.c.auction_start.is_(None))
+                .values(auction_start=datetime.now(timezone.utc))
+                .returning(self.inventory_item_table.c.auction_start)
+            )
+            updated = await execute_query(self._db, update_query)
+            if updated:
+                self.auction_start = updated._mapping.get("auction_start")
+
             insert_query = self.item_bids.insert().values(normalized)
             await execute_query(self._db, insert_query, QueryResultType.none)
 
@@ -459,7 +479,7 @@ class StockItem:
         return bids
 
     @staticmethod
-    async def fetch(db: AsyncEngine, inventory_id: Union[uuid.UUID, str], load_bids: bool = True) -> Optional["StockItem"]:
+    async def fetch(db: AsyncEngine, inventory_id: Union[uuid.UUID, str], load_bids: bool = True, load_item: bool = True) -> Optional["StockItem"]:
         if isinstance(inventory_id, str):
             inventory_id = uuid.UUID(inventory_id)
 
@@ -473,12 +493,15 @@ class StockItem:
         if not row:
             return None
 
-        item = StockItem.InventoryItemSchema(db).load(dict(row._mapping))
+        stock_item = StockItem.InventoryItemSchema(db).load(dict(row._mapping))
+
+        if load_item:
+            stock_item.item = await Item.fetch(db, stock_item.item_id)
 
         if load_bids:
-            await item.load_bids()
+            await stock_item.load_bids()
 
-        return item
+        return stock_item
 
     @staticmethod
     async def fetch_by_market(db: AsyncEngine, house_id: Union[uuid.UUID, str], load_bids: bool = True) -> list["StockItem"]:
@@ -519,6 +542,7 @@ class AuctionHouse:
         self.min_bid_percent = kwargs.get('min_bid_percent', 100)
         self.auction_length = kwargs.get("auction_length") # Length in hours
         self.reroll_interval = kwargs.get("reroll_interval") # Interval in hours
+        self.action_log_activity_name = kwargs.get("auction_log_activity_name")
 
         # Post Load Items
         self.items: list["Item"] = kwargs.get("items", [])
@@ -535,7 +559,8 @@ class AuctionHouse:
         sa.Column("message_id", sa.BigInteger(), nullable=False),
         sa.Column("min_bid_percent", sa.DECIMAL(), nullable=True),
         sa.Column("auction_length", sa.DECIMAL(), nullable=True),
-        sa.Column("reroll_interval", sa.DECIMAL(), nullable=True)
+        sa.Column("reroll_interval", sa.DECIMAL(), nullable=True),
+        sa.Column("action_log_activity_name", sa.String(), nullable=True)
     )
 
     @property
@@ -561,6 +586,7 @@ class AuctionHouse:
         min_bid_percent = fields.Float(required=False, allow_none=True)
         auction_length = fields.Float(required=False, allow_none=True)
         reroll_interval = fields.Float(required=False, allow_none=True)
+        action_log_activity_name = fields.String(required=False, allow_none=True)
 
         def __init__(self, bot: "StewardBot", **kwargs):
             super().__init__(**kwargs)
@@ -590,6 +616,7 @@ class AuctionHouse:
             "min_bid_percent": self.min_bid_percent,
             "auction_length": self.auction_length,
             "reroll_interval": self.reroll_interval,
+            "action_log_activity_name": self.action_log_activity_name
         }
 
         if self.id:
@@ -706,12 +733,13 @@ class AuctionHouse:
             return None
 
         if not self.inventory:
-            return datetime.now(timezone.utc)
+            return None
         
-        earliest = min(inv.auction_start for inv in self.inventory if inv.auction_start)
-        if not earliest:
-            return datetime.now(timezone.utc)
+        starts = [inv.auction_start for inv in self.inventory if inv.auction_start]
+        if not starts:
+            return None
 
+        earliest = min(starts)
         return earliest + timedelta(hours=float(self.reroll_interval))
     
     def auction_end_at(self, inventory_item: "StockItem"):
@@ -770,6 +798,19 @@ class AuctionHouse:
                 break
 
         if winner and winning_bid is not None:
+            if self.action_log_activity_name and self.action_log_activity_name != "":
+                member = self.guild.get_member(winner.player_id)
+                winning_player = await Player.get_or_create(self._bot.db, member)
+                await StewardLog.create(
+                    self._bot,
+                    self._bot.user,
+                    winning_player,
+                    LogEvent.automation,
+                    activity=self.action_log_activity_name,
+                    currency=-winning_bid,
+                    character=winner,
+                    notes=f"Auction won: {item.name}"
+                )
             self._bot.dispatch(RuleTrigger.auction_complete.name, item, winner, winning_bid, bids, reason)
         await inventory_item.delete()
 
@@ -787,6 +828,60 @@ class AuctionHouse:
 
         if message:
             await message.edit(view=view)
+
+    async def reroll_inventory(self):
+        for inv in list(self.inventory):
+            await self.finalize_item(inv, "Inventory Rerolled")
+
+        market = await self.fetch_by_id(self._bot, self.id)
+
+        if not market.shelves or not market.items:
+            await market.refresh_view()
+            return
+        
+        shelves = sorted(market.shelves, key=lambda shelf: shelf.priority)
+        remaining_slots = {shelf.id: max(0, int(shelf.max_qty or 0)) for shelf in shelves}
+        item_counts = {item.id: 0 for item in market.items}
+        placements = []
+
+        # Pass 1 - Initial Load
+        for item in market.items:
+            min_qty = max(0, int(item.min_qty or 0))
+            for _ in range(min_qty):
+                eligible_shelves = [shelf for shelf in shelves if remaining_slots[shelf.id] > 0]
+                if not eligible_shelves:
+                    break
+
+                shelf = random.choice(eligible_shelves)
+                placements.append((item.id, shelf.id))
+                remaining_slots[shelf.id] -= 1
+                item_counts[item.id] += 1
+
+        # Pass 2 - Fill in gaps
+        for shelf in shelves:
+            while remaining_slots[shelf.id] > 0:
+                eligible_items = [
+                    item for item in market.items
+                    if item.max_qty is None or item_counts[item.id] < int(item.max_qty)
+                ]
+
+                if not eligible_items:
+                    break
+
+                item = random.choice(eligible_items)
+                placements.append((item.id, shelf.id))
+                remaining_slots[shelf.id] -= 1
+                item_counts[item.id] += 1
+
+            for item_id, shelf_id in placements:
+                inv = StockItem(self._bot.db, item_id=item_id, shelf_id=shelf_id)
+                await inv.upsert()
+
+            market = await self.fetch_by_id(self._bot, market.id)
+            await market.refresh_view()
+
+
+        
     
             
 
