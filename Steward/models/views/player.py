@@ -1,9 +1,11 @@
 from datetime import datetime, timezone
 import logging
+import re
 import discord
 import discord.ui as ui
 
 from Steward.bot import StewardBot, StewardApplicationContext
+from Steward.models.embeds import ErrorEmbed
 from Steward.models.modals.player import NewCharacterModal, PlayerInformationModal
 from Steward.models.modals import get_value_modal
 from Steward.models.objects.character import Character
@@ -853,6 +855,12 @@ class CharacterInfoView(BaseInfoView):
             length=2000,
             required=False
         )
+
+        pattern = r"^https?:\/\/(?:[a-z0-9\-]+\.)+[a-z]{2,63}(?:\/[^?#\s]+)+\.(?:png|jpg|jpeg|gif|webp)(?:\?[^#\s]*)?(?:#[^\s]*)?$"
+
+        if new_avatar and not re.match(pattern, new_avatar, re.IGNORECASE):
+            await interaction.channel.send(embed=ErrorEmbed("This is not a valid image url"))
+            return await self.refresh_content(interaction)
 
         if new_avatar is not None and old_avatar != new_avatar:
             # Intentionally not logging this
