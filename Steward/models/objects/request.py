@@ -378,12 +378,13 @@ class Request:
 
         for player, characters in self.player_characters.items():
             for character in characters:
+                updated_character = await character.fetch(bot.db, character.id)
                 await StewardLog.create(
                         bot,
                         author,
                         player,
                         LogEvent.activity,
-                        character=character,
+                        character=updated_character,
                         activity=activity,
                         notes=self.notes
                     )
