@@ -2,6 +2,7 @@ from decimal import Decimal
 import uuid
 import sqlalchemy as sa
 import discord
+import logging
 
 from typing import TYPE_CHECKING, Union
 from marshmallow import Schema, fields, post_load
@@ -14,6 +15,8 @@ from Steward.models.objects.enum import LogEvent, QueryResultType, RuleTrigger
 from Steward.models import metadata
 from Steward.models.objects.exceptions import StewardError, TransactionError
 from Steward.utils.dbUtils import execute_query
+
+log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ...bot import StewardBot
@@ -400,7 +403,13 @@ class StewardLog:
                 limit = int(server.xp_global_limit(player, character))
                 remaining_to_limit = max(0, limit - int(character.xp))
                 applied_xp = min(applied_xp, remaining_to_limit)
+            
 
+            log.info(
+                f"Character Log XP: {character.name} [{character.id}] - Pre: {character.xp}, Post: {character.xp + applied_xp}"
+                f", Original: {xp}, Processed: {applied_xp}, Cap: {remaining_to_limit}, limit: {server.xp_global_limit(player, character)}"
+                f", Activity: {activity.name if activity else ''}"
+                )
             character.xp += applied_xp
 
             if activity and activity.limited:
