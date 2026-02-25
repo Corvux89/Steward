@@ -711,7 +711,7 @@ class CharacterInfoView(BaseInfoView):
     def _add_xp_section(self, container: ui.Container):
         xp_level = self.ctx.server.get_level_for_xp(self.character.xp)
         xp_display = ui.TextDisplay(
-            f"**XP**: {self.character.xp:,} (Level {xp_level}{' eligible' if xp_level > self.character.level else ''})"
+            f"**XP**: {self.character.xp:,} (Level {xp_level}{' eligible' if xp_level > self.character.level else ''}) / {self.ctx.server.xp_global_limit(self.player, self.character)}"
         )
         
         if self.staff:

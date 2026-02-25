@@ -335,6 +335,9 @@ class StewardLog:
         else:
             character = kwargs.get("character")
 
+            if character:
+                character = await Character.fetch(bot.db, character.id, False)
+
         server = await Server.get_or_create(bot.db, bot.get_guild(player.guild.id))
         context = AutomationContext(player=player, server=server, character=character, patrol=kwargs.get("patrol"))
 
