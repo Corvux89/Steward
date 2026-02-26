@@ -177,6 +177,7 @@ class Character:
         
         self.activity_points += 1 * modifier
         new_point = ctx.server.get_activitypoint_for_points(self.activity_points)
+        await self.upsert()
 
         if (not old_point and new_point) or old_point.level != new_point.level:
             from .log import StewardLog
@@ -193,8 +194,6 @@ class Character:
             )
 
             ctx.bot.dispatch(LogEvent.reward.name, log=activity_log)
-        else:
-            await self.upsert()
 
 
 
