@@ -401,6 +401,7 @@ class StewardLog:
         # Updates
         if character:
             character.currency += currency
+            remaining_to_limit = None
 
             if server.xp_global_limit_expr and server.xp_global_limit_expr != "" and applied_xp > 0:
                 limit = int(server.xp_global_limit(player, character))
@@ -410,8 +411,8 @@ class StewardLog:
 
             log.info(
                 f"Character Log XP: {character.name} [{character.id}] - Pre: {character.xp}, Post: {character.xp + applied_xp}"
-                f", Original: {xp}, Processed: {applied_xp}, Cap: {remaining_to_limit}, limit: {server.xp_global_limit(player, character)}"
-                f", Activity: {activity.name if activity else ''}"
+                f", Original: {xp}, Processed: {applied_xp}, Cap: {remaining_to_limit or ''}, limit: {server.xp_global_limit(player, character)}"
+                f", Activity: {activity.name if activity else ''}, Notes: {notes}"
                 )
             character.xp += applied_xp
 
