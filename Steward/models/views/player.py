@@ -58,6 +58,13 @@ class BaseInfoView(StewardView):
             if self.delete_on_timeout:
                 await try_delete(message)
 
+    async def refresh_content(self, interaction):
+        if self.character:
+            self.character = await Character.fetch(self.bot.db, self.character.id)
+
+        self.player = await Player.get_or_create(self.bot.db, self.player)
+        return await super().refresh_content(interaction)
+
 
 class PlayerLogSearchView(StewardView):
     __copy_attrs__ = [
@@ -834,6 +841,7 @@ class CharacterInfoView(BaseInfoView):
 
         if new_nick is not None and old_nick != new_nick:
             self.character.nickname = new_nick
+            await self.character.upsert()
 
             await StewardLog.create(
                 self.bot,
@@ -912,6 +920,7 @@ class CharacterInfoView(BaseInfoView):
         if new_limited_currency is not None and old_limited_currency != new_limited_currency:
             difference = new_limited_currency - old_limited_currency
             self.character.limited_currency = new_limited_currency
+            await self.character.upsert()
 
             await StewardLog.create(
                 self.bot,
@@ -964,6 +973,7 @@ class CharacterInfoView(BaseInfoView):
         if new_limited_xp is not None and old_limited_xp != new_limited_xp:
             difference = new_limited_xp - old_limited_xp
             self.character.limited_xp = new_limited_xp
+            await self.character.upsert()
 
             await StewardLog.create(
                 self.bot,
@@ -996,6 +1006,7 @@ class CharacterInfoView(BaseInfoView):
                 )
             ):
                 self.character.activity_points = new_ap
+                await self.character.upsert()
                 
                 await StewardLog.create(
                     self.bot,
@@ -1029,6 +1040,7 @@ class CharacterInfoView(BaseInfoView):
                 return await self.refresh_content(interaction)
             
         self.character.level += 1
+        await self.character.upsert()
 
         log = await StewardLog.create(
             self.bot,
@@ -1050,6 +1062,7 @@ class CharacterInfoView(BaseInfoView):
             f"Are you sure you wish to inactivate this character?"
         ):
             self.character.active = False
+            await self.character.upsert()
 
             log = await StewardLog.create(
                 self.bot,
@@ -1247,6 +1260,7 @@ class NewCharacterView(BaseInfoView):
     async def _on_create_button(self, interaction: discord.Interaction):
         if self.application_type != ApplicationType.new:
             self.reroll_character.active = False
+            await self.reroll_character.upsert()
             reroll_log = await StewardLog.create(
                 self.ctx.bot,
                 self.ctx.author,
@@ -1257,6 +1271,7 @@ class NewCharacterView(BaseInfoView):
             )
             await self.bot.dispatch(RuleTrigger.inactivate_character.name, interaction, self.reroll_character, reroll_log)
 
+        self.new_character = await self.new_character.upsert()
         new_log = await StewardLog.create(
             self.ctx.bot,
             self.ctx.author,
