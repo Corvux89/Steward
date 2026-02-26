@@ -1020,6 +1020,7 @@ class CharacterInfoView(BaseInfoView):
         await self.refresh_content(interaction)
 
     async def _on_character_level_up(self, interaction: discord.Interaction):
+        await interaction.response.defer()
         new_level = self.character.level + 1
         min_xp = self.ctx.server.get_xp_for_level(new_level)
         notes = f"Level up!: `{self.character.level}` -> `{new_level}`"

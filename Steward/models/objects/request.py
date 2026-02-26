@@ -141,6 +141,7 @@ class Request:
                 self.request_table.update()
                 .values(**update_dict)
                 .returning(self.request_table)
+                .where(self.request_table.c.id == self.id)
             )
         else:
             query = (

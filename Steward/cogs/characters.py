@@ -195,11 +195,14 @@ class CharacterCog(commands.Cog):
             if not ctx.player.active_characters:
                 raise StewardError("You don't have any active characters. Please create a character first.")
             
-            character = await get_character_select_modal(
-                ctx,
-                ctx.player.active_characters,
-                title=f"Select Character for {template.name}"
-            )
+            if len(ctx.player.active_characters) == 1:
+                character = ctx.player.primary_character
+            else:
+                character = await get_character_select_modal(
+                    ctx,
+                    ctx.player.active_characters,
+                    title=f"Select Character for {template.name}"
+                )
             
             if not character:
                 raise CharacterNotFound(ctx.player)

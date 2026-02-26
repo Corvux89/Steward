@@ -8,6 +8,7 @@ from Steward.models.modals import get_value_modal
 from Steward.models.objects.enum import PatrolOutcome, RuleTrigger
 from Steward.models.objects.exceptions import CharacterNotFound, StewardError
 from Steward.models.objects.patrol import Patrol
+from Steward.models.views import confirm_view
 from Steward.models.views.patrol import PatrolView
 from Steward.utils.autocompleteUtils import patrol_outcome_autocomplete
 from Steward.utils.discordUtils import is_admin
@@ -118,6 +119,8 @@ class PatrolCog(commands.Cog):
             autocomplete=patrol_outcome_autocomplete
         )
     ):
+        await ctx.defer(ephemeral=True)
+        
         patrol = await Patrol.fetch(self.bot, ctx.channel)
 
         if not patrol:
@@ -129,6 +132,14 @@ class PatrolCog(commands.Cog):
         if not (outcome := PatrolOutcome(outcome)):
             raise StewardError("Invalid Difficulty")
         
+        if await confirm_view(
+            ctx,
+            f"Complete this patrol with an outcome of `{outcome.value}`?",
+            delete_prompt=False
+        ) == False:
+            await ctx.delete()
+            return
+        
         patrol.outcome = outcome.name
 
         try:
@@ -136,14 +147,15 @@ class PatrolCog(commands.Cog):
             await message.delete()
         except:
             pass
-
+        
+        await ctx.followup.send("Patrol completed!", ephemeral=True)
         await ctx.channel.send(CHANNEL_BREAK)
+        await ctx.delete()
 
         patrol.end_ts = datetime.now(timezone.utc)
         await patrol.upsert()
         self.bot.dispatch(RuleTrigger.patrol_complete.name, patrol)
 
-        await ctx.delete()
 
 
 
