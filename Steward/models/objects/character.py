@@ -1,4 +1,5 @@
 from typing import TYPE_CHECKING, Union
+import logging
 import sqlalchemy as sa
 import uuid
 
@@ -15,6 +16,8 @@ if TYPE_CHECKING:
     from .player import Player
     from ...bot import StewardApplicationContext
     
+
+log = logging.getLogger(__name__)
 
 class Character:
     def __init__(self, db: AsyncEngine, **kwargs):
@@ -174,24 +177,36 @@ class Character:
         player = await Player.get_or_create(ctx.bot.db, ctx.server.get_member(self.player_id))
         modifier = 1 if increment else -1
         old_point = ctx.server.get_activitypoint_for_points(self.activity_points)
-        
-        self.activity_points += 1 * modifier
+        log.info(f'Activity Point {'Added' if increment else 'Removed'} for {self.name} [{self.id}]')
+        self.activity_points = max(self.activity_points + (1 * modifier), 0)
         new_point = ctx.server.get_activitypoint_for_points(self.activity_points)
         await self.upsert()
 
-        if (not old_point and new_point) or old_point.level != new_point.level:
+        if (not new_point and old_point and increment == False) or (not old_point and new_point) or (old_point and new_point and old_point.level != new_point.level):
             from .log import StewardLog
 
-            activity_log = await StewardLog.create(
+            if increment == False:
+                activity_log = await StewardLog.create(
                 ctx.bot,
                 ctx.bot.user,
                 player,
                 LogEvent.reward,
                 character=self,
-                notes=f"Activity level {new_point.level}{' [REVERSION]' if old_point and new_point.level < old_point.level else ''}",
-                currency=new_point.currenct_expr,
-                xp=new_point.xp_expr
+                notes=f"Activity level {old_point.level} [REVERSION]",
+                currency=f"({old_point.currenct_expr})*-1",
+                xp=f"({old_point.xp_expr})*-1"
             )
+            else:
+                activity_log = await StewardLog.create(
+                    ctx.bot,
+                    ctx.bot.user,
+                    player,
+                    LogEvent.reward,
+                    character=self,
+                    notes=f"Activity level {new_point.level}{' [REVERSION]' if old_point and new_point.level < old_point.level else ''}",
+                    currency=new_point.currenct_expr,
+                    xp=new_point.xp_expr
+                )
 
             ctx.bot.dispatch(LogEvent.reward.name, log=activity_log)
 

@@ -72,7 +72,6 @@ class CharacterCog(commands.Cog):
     @commands.check(dm_check)
     async def character_say(self, ctx: StewardContext):
         await StewardWebhook(ctx).send()
-        await try_delete(ctx.message)
 
     @character_admin_commands.command(
             name="manage",
