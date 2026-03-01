@@ -9,7 +9,7 @@ from timeit import default_timer as timer
 
 from Steward.bot import StewardBot, StewardApplicationContext
 from Steward.models.objects.activityPoints import ActivityPoints
-from Steward.models.objects.auctionHouse import AuctionHouse, Item, Shelf
+from Steward.models.objects.raffleHouse import Raffle, Item, Shelf
 from Steward.models.objects.dashboards import CategoryDashboard
 from Steward.models.objects.enum import RuleTrigger
 from Steward.models.objects.exceptions import StewardError
@@ -17,8 +17,8 @@ from Steward.models.objects.levels import Levels
 from Steward.models.objects.npc import NPC
 from Steward.models.objects.servers import Server
 from Steward.models.objects.activity import Activity
-from Steward.models.views.auctionHouse import AuctionHouseView
-from Steward.utils.autocompleteUtils import auction_house_autocomplete
+from Steward.models.views.raffleHouse import RaffleView
+from Steward.utils.autocompleteUtils import raffle_house_autocomplete
 from Steward.utils.discordUtils import is_admin
 
 log = logging.getLogger(__name__)
@@ -76,8 +76,8 @@ class ServerCog(commands.Cog):
             value="dashboards"
         ),
         discord.OptionChoice(
-            "Auction Houses",
-            value="auction_houses"
+            "Raffle Houses",
+            value="raffle_houses"
         ),
         discord.OptionChoice(
             "All",
@@ -175,12 +175,12 @@ class ServerCog(commands.Cog):
                 )
             )
 
-        if config_item == "auction_houses" or config_item == "all":
+        if config_item == "raffle_houses" or config_item == "all":
             files.append(
                 discord.File(
-                    await self._auction_house_config(ctx.server),
-                    description="Auction Houses",
-                    filename="auction_houses.csv"
+                    await self._raffle_house_config(ctx.server),
+                    description="Raffle Houses",
+                    filename="raffle_houses.csv"
                 )
             )
         
@@ -237,8 +237,8 @@ class ServerCog(commands.Cog):
             elif f_name_lower.startswith("dashboards"):
                 await self._dashboard_config(ctx.server, text)
 
-            elif f_name_lower.startswith("auction_houses") or f_name_lower.startswith("auction houses"):
-                await self._auction_house_config(ctx.server, text)
+            elif f_name_lower.startswith("raffle_houses") or f_name_lower.startswith("raffle houses") or f_name_lower.startswith("auction_houses") or f_name_lower.startswith("auction houses"):
+                await self._raffle_house_config(ctx.server, text)
 
             else:
                 return await ctx.respond("I don't know aht you're trying to do")
@@ -248,45 +248,45 @@ class ServerCog(commands.Cog):
             raise StewardError(e)
 
     @server_commands.command(
-        name="export_auction_inventory",
-        description="Export item inventory definitions for one auction house"
+        name="export_raffle_inventory",
+        description="Export item inventory definitions for one raffle house"
     )
     @commands.check(is_admin)
-    async def export_auction_inventory(
+    async def export_raffle_inventory(
         self,
         ctx: "StewardApplicationContext",
-        auction_house: discord.Option(
+        raffle_house: discord.Option(
             str,
-            description="Auction house name or ID",
+            description="Raffle house name or ID",
             required=True,
-            autocomplete=auction_house_autocomplete
+            autocomplete=raffle_house_autocomplete
         )
     ):
         await ctx.defer()
 
-        house = await self._resolve_auction_house_for_server(ctx.server, auction_house)
+        house = await self._resolve_raffle_house_for_server(ctx.server, raffle_house)
 
         await ctx.respond(
             file=discord.File(
-                await self._auction_inventory_config(house),
-                description=f"Auction Inventory - {house.name}",
-                filename=f"auction_inventory_{house.name}.csv"
+                await self._raffle_inventory_config(house),
+                description=f"Raffle Inventory - {house.name}",
+                filename=f"raffle_inventory_{house.name}.csv"
             )
         )
 
     @server_commands.command(
-        name="import_auction_inventory",
-        description="Import item inventory definitions for one auction house"
+        name="import_raffle_inventory",
+        description="Import item inventory definitions for one raffle house"
     )
     @commands.check(is_admin)
-    async def import_auction_inventory(
+    async def import_raffle_inventory(
         self,
         ctx: "StewardApplicationContext",
-        auction_house: discord.Option(
+        raffle_house: discord.Option(
             str,
-            description="Auction house name or ID",
+            description="Raffle house name or ID",
             required=True,
-            autocomplete=auction_house_autocomplete
+            autocomplete=raffle_house_autocomplete
         ),
         file: discord.Option(
             discord.SlashCommandOptionType.attachment,
@@ -299,57 +299,57 @@ class ServerCog(commands.Cog):
         if not file.filename.lower().endswith('.csv'):
             raise StewardError("File must be a .csv file.")
 
-        house = await self._resolve_auction_house_for_server(ctx.server, auction_house)
+        house = await self._resolve_raffle_house_for_server(ctx.server, raffle_house)
 
         try:
             content = await file.read()
             text = content.decode('utf-8')
-            await self._auction_inventory_config(house, text)
+            await self._raffle_inventory_config(house, text)
         except Exception as e:
             raise StewardError(e)
 
         await ctx.respond(f"Successfully imported inventory for {house.name}.")
 
     @server_commands.command(
-        name="export_auction_shelves",
-        description="Export shelf definitions for one auction house"
+        name="export_raffle_shelves",
+        description="Export shelf definitions for one raffle house"
     )
     @commands.check(is_admin)
-    async def export_auction_shelves(
+    async def export_raffle_shelves(
         self,
         ctx: "StewardApplicationContext",
-        auction_house: discord.Option(
+        raffle_house: discord.Option(
             str,
-            description="Auction house name or ID",
+            description="Raffle house name or ID",
             required=True,
-            autocomplete=auction_house_autocomplete
+            autocomplete=raffle_house_autocomplete
         )
     ):
         await ctx.defer()
 
-        house = await self._resolve_auction_house_for_server(ctx.server, auction_house)
+        house = await self._resolve_raffle_house_for_server(ctx.server, raffle_house)
 
         await ctx.respond(
             file=discord.File(
-                await self._auction_shelves_config(house),
-                description=f"Auction Shelves - {house.name}",
-                filename=f"auction_shelves_{house.name}.csv"
+                await self._raffle_shelves_config(house),
+                description=f"Raffle Shelves - {house.name}",
+                filename=f"raffle_shelves_{house.name}.csv"
             )
         )
 
     @server_commands.command(
-        name="import_auction_shelves",
-        description="Import shelf definitions for one auction house"
+        name="import_raffle_shelves",
+        description="Import shelf definitions for one raffle house"
     )
     @commands.check(is_admin)
-    async def import_auction_shelves(
+    async def import_raffle_shelves(
         self,
         ctx: "StewardApplicationContext",
-        auction_house: discord.Option(
+        raffle_house: discord.Option(
             str,
-            description="Auction house name or ID",
+            description="Raffle house name or ID",
             required=True,
-            autocomplete=auction_house_autocomplete
+            autocomplete=raffle_house_autocomplete
         ),
         file: discord.Option(
             discord.SlashCommandOptionType.attachment,
@@ -362,12 +362,12 @@ class ServerCog(commands.Cog):
         if not file.filename.lower().endswith('.csv'):
             raise StewardError("File must be a .csv file.")
 
-        house = await self._resolve_auction_house_for_server(ctx.server, auction_house)
+        house = await self._resolve_raffle_house_for_server(ctx.server, raffle_house)
 
         try:
             content = await file.read()
             text = content.decode('utf-8')
-            await self._auction_shelves_config(house, text)
+            await self._raffle_shelves_config(house, text)
         except Exception as e:
             raise StewardError(e)
 
@@ -816,17 +816,17 @@ class ServerCog(commands.Cog):
             output.seek(0)
             return output
 
-    async def _auction_house_config(self, server: Server, csv_text: str = None):
+    async def _raffle_house_config(self, server: Server, csv_text: str = None):
         header_mapping = {
             "id": "House ID",
             "name": "Name",
             "channel_id": "Channel ID",
-            "min_bid_percent": "Minimum Bid %",
-            "auction_length": "Auction Length (Hours)",
-            "reroll_interval": "Reroll Interval (Hours)"
+            "max_tickets": "Max Tickets",
+            "ticket_cost_percent": "Ticket Cost %",
+            "raffle_length": "Raffle Length (Hours)"
         }
 
-        houses = [h for h in (await AuctionHouse.fetch_all(self.bot, load_related=True)) if h.guild_id == server.id]
+        houses = [h for h in (await Raffle.fetch_all(self.bot, load_related=True)) if h.guild_id == server.id]
 
         if csv_text:
             reader = csv.DictReader(io.StringIO(csv_text))
@@ -841,7 +841,7 @@ class ServerCog(commands.Cog):
                 incoming_name = self._normalize_csv_value(data.get("name"))
 
                 if not incoming_name:
-                    raise StewardError("Auction house Name is required.")
+                    raise StewardError("Raffle house Name is required.")
 
                 incoming_channel_id = self._parse_required_int(data.get("channel_id"), "Channel ID")
 
@@ -854,7 +854,7 @@ class ServerCog(commands.Cog):
                 is_new_house = house is None
 
                 if not house:
-                    house = AuctionHouse(
+                    house = Raffle(
                         self.bot,
                         guild_id=server.id,
                         message_id=0
@@ -863,23 +863,23 @@ class ServerCog(commands.Cog):
                 house.name = incoming_name
                 house.guild_id = server.id
                 house.channel_id = incoming_channel_id
-                house.min_bid_percent = self._parse_optional_float(data.get("min_bid_percent"))
-                house.auction_length = self._parse_optional_float(data.get("auction_length"))
-                house.reroll_interval = self._parse_optional_float(data.get("reroll_interval"))
+                house.max_tickets = self._parse_optional_float(data.get("max_tickets"))
+                house.ticket_cost_percent = self._parse_optional_float(data.get("ticket_cost_percent"))
+                house.raffle_length = self._parse_optional_float(data.get("raffle_length"))
 
                 house = await house.upsert()
 
                 if is_new_house:
-                    house = await self._initialize_auction_house_message(house)
+                    house = await self._initialize_raffle_house_message(house)
 
                 retained_house_ids.add(house.id)
 
             for house in houses:
                 if house.id not in retained_house_ids:
-                    await self._delete_auction_house(house)
+                    await self._delete_raffle_house(house)
 
         else:
-            schema = AuctionHouse.AuctionHouseSchema(self.bot)
+            schema = Raffle.RaffleSchema(self.bot)
             output = io.StringIO()
             writer = csv.DictWriter(output, fieldnames=header_mapping.values(), quoting=csv.QUOTE_NONNUMERIC)
             writer.writeheader()
@@ -892,7 +892,7 @@ class ServerCog(commands.Cog):
             output.seek(0)
             return output
 
-    async def _auction_inventory_config(self, house: AuctionHouse, csv_text: str = None):
+    async def _raffle_inventory_config(self, house: Raffle, csv_text: str = None):
         header_mapping = {
             "id": "Item ID",
             "name": "Name",
@@ -901,12 +901,12 @@ class ServerCog(commands.Cog):
             "category": "Category",
             "max_qty": "Max Quantity",
             "min_qty": "Min Quantity",
-            "min_bid": "Min Bid"
+            "min_bid": "Min Tickets"
         }
 
-        refreshed_house = await AuctionHouse.fetch_by_id(self.bot, house.id, load_related=True)
+        refreshed_house = await Raffle.fetch_by_id(self.bot, house.id, load_related=True)
         if not refreshed_house:
-            raise StewardError("Auction house not found.")
+            raise StewardError("Raffle house not found.")
 
         if csv_text:
             reader = csv.DictReader(io.StringIO(csv_text))
@@ -917,6 +917,8 @@ class ServerCog(commands.Cog):
 
             for row in rows:
                 data = {k: row.get(v) for k, v in header_mapping.items() if v in row}
+                if "min_bid" not in data and "Min Bid" in row:
+                    data["min_bid"] = row.get("Min Bid")
                 incoming_id = self._parse_optional_uuid(data.get("id"))
                 incoming_name = self._normalize_csv_value(data.get("name"))
 
@@ -928,7 +930,7 @@ class ServerCog(commands.Cog):
                     item = existing_items_by_id.get(str(incoming_id))
                     # Validate that the item belongs to this house (which belongs to this guild)
                     if item and item.house_id != refreshed_house.id:
-                        raise StewardError(f"Item ID {incoming_id} does not belong to auction house '{refreshed_house.name}'.")
+                        raise StewardError(f"Item ID {incoming_id} does not belong to raffle house '{refreshed_house.name}'.")
                 if not item:
                     item = existing_items_by_name.get(incoming_name.lower())
 
@@ -968,7 +970,7 @@ class ServerCog(commands.Cog):
             output.seek(0)
             return output
 
-    async def _auction_shelves_config(self, house: AuctionHouse, csv_text: str = None):
+    async def _raffle_shelves_config(self, house: Raffle, csv_text: str = None):
         header_mapping = {
             "id": "Shelf ID",
             "priority": "Priority",
@@ -976,9 +978,9 @@ class ServerCog(commands.Cog):
             "max_qty": "Max Quantity"
         }
 
-        refreshed_house = await AuctionHouse.fetch_by_id(self.bot, house.id, load_related=True)
+        refreshed_house = await Raffle.fetch_by_id(self.bot, house.id, load_related=True)
         if not refreshed_house:
-            raise StewardError("Auction house not found.")
+            raise StewardError("Raffle house not found.")
 
         if csv_text:
             reader = csv.DictReader(io.StringIO(csv_text))
@@ -997,7 +999,7 @@ class ServerCog(commands.Cog):
                     shelf = existing_shelves_by_id.get(str(incoming_id))
                     # Validate that the shelf belongs to this house (which belongs to this guild)
                     if shelf and shelf.house_id != refreshed_house.id:
-                        raise StewardError(f"Shelf ID {incoming_id} does not belong to auction house '{refreshed_house.name}'.")
+                        raise StewardError(f"Shelf ID {incoming_id} does not belong to raffle house '{refreshed_house.name}'.")
                 if not shelf:
                     shelf = existing_shelves_by_priority.get(incoming_priority)
 
@@ -1034,12 +1036,12 @@ class ServerCog(commands.Cog):
             output.seek(0)
             return output
 
-    async def _resolve_auction_house_for_server(self, server: Server, auction_house: str) -> AuctionHouse:
-        houses = [h for h in (await AuctionHouse.fetch_all(self.bot, load_related=True)) if h.guild_id == server.id]
+    async def _resolve_raffle_house_for_server(self, server: Server, raffle_house: str) -> Raffle:
+        houses = [h for h in (await Raffle.fetch_all(self.bot, load_related=True)) if h.guild_id == server.id]
         if not houses:
-            raise StewardError("No auction houses found for this server.")
+            raise StewardError("No raffle houses found for this server.")
 
-        normalized = auction_house.strip()
+        normalized = raffle_house.strip()
 
         try:
             incoming_id = uuid.UUID(normalized)
@@ -1055,23 +1057,23 @@ class ServerCog(commands.Cog):
         if house:
             return house
 
-        raise StewardError(f"No auction house found matching '{auction_house}'.")
+        raise StewardError(f"No raffle house found matching '{raffle_house}'.")
 
-    async def _initialize_auction_house_message(self, house: AuctionHouse) -> AuctionHouse:
-        house = await AuctionHouse.fetch_by_id(self.bot, house.id, load_related=True)
+    async def _initialize_raffle_house_message(self, house: Raffle) -> Raffle:
+        house = await Raffle.fetch_by_id(self.bot, house.id, load_related=True)
         if not house:
-            raise StewardError("Auction house not found.")
+            raise StewardError("Raffle house not found.")
 
         channel = house.channel
         if not isinstance(channel, discord.TextChannel):
-            raise StewardError(f"Unable to resolve text channel for auction house '{house.name}'.")
+            raise StewardError(f"Unable to resolve text channel for raffle house '{house.name}'.")
 
-        message = await channel.send(view=AuctionHouseView(house))
+        message = await channel.send(view=RaffleView(house))
         house.message_id = message.id
         return await house.upsert()
 
-    async def _delete_auction_house(self, house: AuctionHouse):
-        house = await AuctionHouse.fetch_by_id(self.bot, house.id, load_related=True)
+    async def _delete_raffle_house(self, house: Raffle):
+        house = await Raffle.fetch_by_id(self.bot, house.id, load_related=True)
         if not house:
             return
 

@@ -6,7 +6,7 @@ from ..models.objects.servers import Server
 from ..models.objects.player import Player
 from ..models.objects.form import FormTemplate
 from ..models.objects.activity import Activity
-from ..models.objects.auctionHouse import AuctionHouse
+from ..models.objects.raffleHouse import Raffle
     
 async def activity_autocomplete(ctx: discord.AutocompleteContext):
     """Lightweight autocomplete for activities - loads only activities without full server data"""
@@ -61,10 +61,10 @@ async def patrol_outcome_autocomplete(ctx: discord.AutocompleteContext):
     except Exception:
         return []
 
-async def auction_house_autocomplete(ctx: discord.AutocompleteContext):
-    """Autocomplete for auction house names in the current guild"""
+async def raffle_house_autocomplete(ctx: discord.AutocompleteContext):
+    """Autocomplete for raffle house names in the current guild"""
     try:
-        houses = await AuctionHouse.fetch_all(ctx.bot, load_related=False)
+        houses = await Raffle.fetch_all(ctx.bot, load_related=False)
         user_input = ctx.value.lower() if ctx.value else ""
 
         names = [
@@ -78,3 +78,6 @@ async def auction_house_autocomplete(ctx: discord.AutocompleteContext):
         return names[:25] or []
     except Exception:
         return []
+
+
+auction_house_autocomplete = raffle_house_autocomplete

@@ -49,6 +49,7 @@ class RuleTrigger(StewardEnum):
     new_request = "New Request"
     new_application = "New Application"
     patrol_complete = "Patrol Completed"
+    raffle_complete = "Raffle Complete"
     auction_complete = "Auction Complete"
 
 class PatrolOutcome(StewardEnum):
