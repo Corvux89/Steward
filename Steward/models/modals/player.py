@@ -86,9 +86,20 @@ class NewCharacterModal(ui.DesignerModal):
         )
 
     async def callback(self, interaction):
-        self.character.name = self.get_item("char_name").value
-        self.character.species_str = self.get_item("char_species").value
-        self.character.class_str = self.get_item("char_class").value
+        name = self.get_item("char_name").value.strip()
+        species = self.get_item("char_species").value.strip()
+        character_class = self.get_item("char_class").value.strip()
+
+        if not name or not species or not character_class:
+            await interaction.response.send_message(
+                "Character Name, Species, and Class cannot be empty.",
+                ephemeral=True
+            )
+            return
+
+        self.character.name = name
+        self.character.species_str = species
+        self.character.class_str = character_class
         try:
             self.character.currency = int(self.get_item("char_currency").value)
             self.character.level = int(self.get_item("char_level").values[0])
@@ -186,7 +197,7 @@ class PlayerInformationModal(ui.DesignerModal):
         await interaction.response.defer()
         self.stop()
 
-class CharacterDemographicsModal(ui.DesignerModal):
+class CharacterInformationModal(ui.DesignerModal):
     character: Character
 
     def __init__(
@@ -194,6 +205,16 @@ class CharacterDemographicsModal(ui.DesignerModal):
             character: Character
     ):
         self.character = character
+
+        name_input = ui.Label(
+            "Character Name",
+            ui.InputText(
+                placeholder="Character Name",
+                max_length=2000,
+                value=self.character.name if self.character.name else "",
+                custom_id="char_name"
+            )
+        )
 
         species_input = ui.Label(
             "Species",
@@ -216,7 +237,27 @@ class CharacterDemographicsModal(ui.DesignerModal):
         )
 
         super().__init__(
+            name_input,
             species_input,
             class_input,
-            title="Character Demographics"
+            title="Character Information"
         )
+
+    async def callback(self, interaction):
+        name = self.get_item("char_name").value
+        species = self.get_item("char_species").value
+        character_class = self.get_item("char_class").value
+
+        if not name or not species or not character_class:
+            await interaction.response.send_message(
+                "Character Name, Species, and/or Class cannot be empty.",
+                ephemeral=True
+            )
+            return
+
+        self.character.name = name
+        self.character.species_str = species
+        self.character.class_str = character_class
+        await self.character.upsert()
+        await interaction.response.defer()
+        self.stop()

@@ -6,7 +6,7 @@ import discord.ui as ui
 
 from Steward.bot import StewardBot, StewardApplicationContext
 from Steward.models.embeds import ErrorEmbed
-from Steward.models.modals.player import NewCharacterModal, PlayerInformationModal
+from Steward.models.modals.player import CharacterInformationModal, NewCharacterModal, PlayerInformationModal
 from Steward.models.modals import get_value_modal
 from Steward.models.objects.character import Character
 from Steward.models.objects.enum import ApplicationType, LogEvent, RuleTrigger
@@ -59,11 +59,11 @@ class BaseInfoView(StewardView):
                 await try_delete(message)
 
     async def refresh_content(self, interaction):
+        await super().refresh_content(interaction)
         if self.character:
             self.character = await Character.fetch(self.bot.db, self.character.id)
 
         self.player = await Player.get_or_create(self.bot.db, self.player)
-        return await super().refresh_content(interaction)
 
 
 class PlayerLogSearchView(StewardView):
@@ -659,10 +659,11 @@ class CharacterInfoView(BaseInfoView):
         content.append(container)
 
         # Buttons
-        row_1 = self._add_button_row_1()
-
-        if row_1:
-            content.append(ui.ActionRow(*row_1))
+        buttons = self._build_buttons()
+        for index in range(0, len(buttons), 5):
+            row_buttons = buttons[index:index + 5]
+            if row_buttons:
+                content.append(ui.ActionRow(*row_buttons))
         
         # Character select dropdown
         character_select = get_character_select_option(self.player, self.character, self._on_char_select)
@@ -766,7 +767,7 @@ class CharacterInfoView(BaseInfoView):
             else:
                 container.add_item(activity_display)
 
-    def _add_button_row_1(self):
+    def _build_buttons(self):
         buttons = []
 
         if self.character.player_id == self.ctx.author.id:
@@ -787,6 +788,14 @@ class CharacterInfoView(BaseInfoView):
             buttons.append(activity_button)
 
         if self.staff:
+            update_button = ui.Button(
+                label="Basic Information",
+                style=discord.ButtonStyle.blurple,
+                custom_id="basic_information"
+            )
+            update_button.callback = self._on_basic_information
+            buttons.append(update_button)
+
             level_up_button = ui.Button(
                 label="Level up!",
                 style=discord.ButtonStyle.green,
@@ -802,7 +811,7 @@ class CharacterInfoView(BaseInfoView):
                 custom_id="character_inactivate"
             )
             inactivate_button.callback = self._on_character_inactivate
-            buttons.append(inactivate_button)
+            buttons.append(inactivate_button)            
 
         exit_button = ui.Button(
                 label="Quit",
@@ -812,6 +821,7 @@ class CharacterInfoView(BaseInfoView):
         buttons.append(exit_button)
 
         return buttons
+
     
     async def _on_char_select(self, interaction: discord.Interaction):
         char = self.get_item("char_select").values[0]
@@ -826,7 +836,47 @@ class CharacterInfoView(BaseInfoView):
         )
         self.character = character
         
-        await self.defer_to(CharacterInfoView, interaction)
+        await self.refresh_content(interaction)
+
+    async def _on_basic_information(self, interaction: discord.Interaction):
+        old_name = self.character.name
+        old_species = self.character.species_str
+        old_class = self.character.class_str
+
+        modal = CharacterInformationModal(self.character)
+        await self.prompt_modal(modal, interaction)
+
+        if self.character.name != old_name:
+            await StewardLog.create(
+                self.bot,
+                self.ctx.author,
+                self.player,
+                LogEvent.edit_character,
+                character=self.character,
+                notes=f"Name update: `{old_name}` -> `{self.character.name}`"
+            )
+
+        if self.character.species_str != old_species:
+            await StewardLog.create(
+                self.bot,
+                self.ctx.author,
+                self.player,
+                LogEvent.edit_character,
+                character=self.character,
+                notes=f"Species update: `{old_species}` -> `{self.character.species_str}`"
+            )
+
+        if self.character.class_str != old_class:
+            await StewardLog.create(
+                self.bot,
+                self.ctx.author,
+                self.player,
+                LogEvent.edit_character,
+                character=self.character,
+                notes=f"Class update: `{old_class}` -> `{self.character.class_str}`"
+            )
+
+        await self.refresh_content(interaction)
 
     async def _on_edit_character_nickname(self, interaction: discord.Interaction):
         old_nick = self.character.nickname if self.character.nickname and self.character.nickname != '' else ' '

@@ -1,5 +1,5 @@
 # TODO: Market
-# - Auction House (silent and verbose)
+# - Raffle
 # - Merchant
 # TODO: Log review interfaces
 # TODO: Fix ugly imports
