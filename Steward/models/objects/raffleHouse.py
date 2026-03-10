@@ -254,7 +254,7 @@ class Shelf:
         return Shelf.ShelfSchema(db).load(dict(row._mapping))
 
     @staticmethod
-    async def fetch_by_market(db: AsyncEngine, house_id: Union[uuid.UUID, str]) -> list["Shelf"]:
+    async def fetch_by_house(db: AsyncEngine, house_id: Union[uuid.UUID, str]) -> list["Shelf"]:
         if isinstance(house_id, str):
             house_id = uuid.UUID(house_id)
 
@@ -276,7 +276,7 @@ class Shelf:
             self.items = []
             return self.items
 
-        items = [inv for inv in (await StockItem.fetch_by_market(self._db, self.house_id, load_tickets=False)) if inv.shelf_id == self.id]
+        items = [inv for inv in (await StockItem.fetch_by_house(self._db, self.house_id, load_tickets=False)) if inv.shelf_id == self.id]
         self.items = items
         return items
 
@@ -521,7 +521,7 @@ class StockItem:
         return stock_item
 
     @staticmethod
-    async def fetch_by_market(db: AsyncEngine, house_id: Union[uuid.UUID, str], load_tickets: bool = True, load_bids: Optional[bool] = None) -> list["StockItem"]:
+    async def fetch_by_house(db: AsyncEngine, house_id: Union[uuid.UUID, str], load_tickets: bool = True, load_bids: Optional[bool] = None) -> list["StockItem"]:
         if isinstance(house_id, str):
             house_id = uuid.UUID(house_id)
 
@@ -569,7 +569,7 @@ class Raffle:
         self.inventory: list["StockItem"] = kwargs.get("inventory", [])
         self.shelves: list["Shelf"] = kwargs.get("shelves", [])
 
-    market_table = sa.Table(
+    house_table = sa.Table(
         "ref_auction_houses",
         metadata,
         sa.Column("id", sa.UUID, primary_key=True, default=uuid.uuid4),
@@ -613,7 +613,7 @@ class Raffle:
             self.bot = bot
 
         @post_load
-        def make_market(self, data, **kwargs):
+        def make_house(self, data, **kwargs):
             return Raffle(self.bot, **data)
 
     async def delete(self):
@@ -621,8 +621,8 @@ class Raffle:
             return
 
         query = (
-            self.market_table.delete()
-            .where(self.market_table.c.id == self.id)
+            self.house_table.delete()
+            .where(self.house_table.c.id == self.id)
         )
 
         await execute_query(self._bot.db, query, QueryResultType.none)
@@ -641,16 +641,16 @@ class Raffle:
 
         if self.id:
             query = (
-                self.market_table.update()
-                .where(self.market_table.c.id == self.id)
+                self.house_table.update()
+                .where(self.house_table.c.id == self.id)
                 .values(**update_dict)
-                .returning(self.market_table)
+                .returning(self.house_table)
             )
         else:
             query = (
-                self.market_table.insert()
+                self.house_table.insert()
                 .values(**update_dict)
-                .returning(self.market_table)
+                .returning(self.house_table)
             )
 
         row = await execute_query(self._bot.db, query)
@@ -663,9 +663,9 @@ class Raffle:
     @staticmethod
     async def fetch(bot: "StewardBot", guild_id: int, load_related: bool = True) -> Union["Raffle", None]:
         query = (
-            Raffle.market_table.select()
-            .where(Raffle.market_table.c.guild_id == guild_id)
-            .order_by(Raffle.market_table.c.name)
+            Raffle.house_table.select()
+            .where(Raffle.house_table.c.guild_id == guild_id)
+            .order_by(Raffle.house_table.c.name)
             .limit(1)
         )
 
@@ -674,12 +674,12 @@ class Raffle:
         if not row:
             return None
 
-        market = Raffle.RaffleSchema(bot).load(dict(row._mapping))
+        house = Raffle.RaffleSchema(bot).load(dict(row._mapping))
 
         if load_related:
-            await Raffle._load_related(bot, market)
+            await Raffle._load_related(bot, house)
 
-        return market
+        return house
 
     @staticmethod
     async def fetch_by_id(bot: "StewardBot", house_id: Union[uuid.UUID, str], load_related: bool = True) -> Union["Raffle", None]:
@@ -687,8 +687,8 @@ class Raffle:
             house_id = uuid.UUID(house_id)
 
         query = (
-            Raffle.market_table.select()
-            .where(Raffle.market_table.c.id == house_id)
+            Raffle.house_table.select()
+            .where(Raffle.house_table.c.id == house_id)
         )
 
         row = await execute_query(bot.db, query)
@@ -696,18 +696,18 @@ class Raffle:
         if not row:
             return None
 
-        market = Raffle.RaffleSchema(bot).load(dict(row._mapping))
+        house = Raffle.RaffleSchema(bot).load(dict(row._mapping))
 
         if load_related:
-            await Raffle._load_related(bot, market)
+            await Raffle._load_related(bot, house)
 
-        return market
+        return house
 
     @staticmethod
     async def fetch_all(bot: "StewardBot", load_related: bool = True) -> list["Raffle"]:
         query = (
-            Raffle.market_table.select()
-            .order_by(Raffle.market_table.c.name)
+            Raffle.house_table.select()
+            .order_by(Raffle.house_table.c.name)
         )
 
         rows = await execute_query(bot.db, query, QueryResultType.multiple)
@@ -715,30 +715,30 @@ class Raffle:
         if not rows:
             return []
 
-        markets = [Raffle.RaffleSchema(bot).load(dict(row._mapping)) for row in rows]
+        houses = [Raffle.RaffleSchema(bot).load(dict(row._mapping)) for row in rows]
 
         if load_related:
-            for market in markets:
-                await Raffle._load_related(bot, market)
+            for house in houses:
+                await Raffle._load_related(bot, house)
 
-        return markets
+        return houses
 
     @staticmethod
-    async def _load_related(bot: "StewardBot", market: "Raffle"):
-        market.items = await Item.fetch_by_house(bot.db, market.id)
-        market.shelves = await Shelf.fetch_by_market(bot.db, market.id)
-        market.inventory = await StockItem.fetch_by_market(bot.db, market.id, load_tickets=True)
+    async def _load_related(bot: "StewardBot", house: "Raffle"):
+        house.items = await Item.fetch_by_house(bot.db, house.id)
+        house.shelves = await Shelf.fetch_by_house(bot.db, house.id)
+        house.inventory = await StockItem.fetch_by_house(bot.db, house.id, load_tickets=True)
 
-        items_by_id = {item.id: item for item in market.items}
-        shelves_by_id = {shelf.id: shelf for shelf in market.shelves}
+        items_by_id = {item.id: item for item in house.items}
+        shelves_by_id = {shelf.id: shelf for shelf in house.shelves}
 
-        for inv_item in market.inventory:
+        for inv_item in house.inventory:
             inv_item.item = items_by_id.get(inv_item.item_id)
             inv_item.shelf = shelves_by_id.get(inv_item.shelf_id)
 
         # Populate shelf inventory items
-        for shelf in market.shelves:
-            shelf.items = [inv for inv in market.inventory if inv.shelf_id == shelf.id]
+        for shelf in house.shelves:
+            shelf.items = [inv for inv in house.inventory if inv.shelf_id == shelf.id]
 
     def ticket_cost(self, item: "Item") -> int:
         cost = (item.cost or 0) * ((self.ticket_cost_percent or 0) / 100)
@@ -907,19 +907,19 @@ class Raffle:
             await message.edit(view=view)
 
     async def reroll_inventory(self):
-        market = await self.fetch_by_id(self._bot, self.id)
+        house = await self.fetch_by_id(self._bot, self.id)
 
-        if not market.shelves or not market.items:
-            await market.refresh_view()
+        if not house.shelves or not house.items:
+            await house.refresh_view()
             return
         
-        shelves = sorted(market.shelves, key=lambda shelf: shelf.priority)
+        shelves = sorted(house.shelves, key=lambda shelf: shelf.priority)
         remaining_slots = {shelf.id: max(0, int(shelf.max_qty or 0)) for shelf in shelves}
-        item_counts = {item.id: 0 for item in market.items}
+        item_counts = {item.id: 0 for item in house.items}
         placements = []
 
         # Pass 1 - Initial Load
-        for item in market.items:
+        for item in house.items:
             min_qty = max(0, int(item.min_qty or 0))
             for _ in range(min_qty):
                 eligible_shelves = [shelf for shelf in shelves if remaining_slots[shelf.id] > 0]
@@ -935,7 +935,7 @@ class Raffle:
         for shelf in shelves:
             while remaining_slots[shelf.id] > 0:
                 eligible_items = [
-                    item for item in market.items
+                    item for item in house.items
                     if item.max_qty is None or item_counts[item.id] < int(item.max_qty)
                 ]
 
@@ -951,8 +951,8 @@ class Raffle:
                 inv = StockItem(self._bot.db, item_id=item_id, shelf_id=shelf_id)
                 await inv.upsert()
 
-            market = await self.fetch_by_id(self._bot, market.id)
-            await market.refresh_view()
+            house = await self.fetch_by_id(self._bot, house.id)
+            await house.refresh_view()
 
 
 AuctionHouse = Raffle
