@@ -181,6 +181,9 @@ class Requestview(BaseRequestView):
             if self.selected_player not in self.request.player_characters:
                 self.request.player_characters[self.selected_player] = []
 
+            if len(self.selected_player.active_characters) == 1:
+                self.request.player_characters[self.selected_player].append(self.selected_player.primary_character)
+                self.selected_player = None
         else:
             self.selected_player = None
 
@@ -384,8 +387,17 @@ class PlayerRequestView(StewardView):
         )
 
     async def _edit_button(self, interaction: discord.Interaction):
-        view = Requestview(self.bot, interaction, self.request.primary_player, self.request.primary_character, request=self.request)
-        await interaction.message.edit(view=view)
+        view = Requestview(
+            self.bot,
+            interaction,
+            self.request.primary_player,
+            self.request.primary_character,
+            request=self.request,
+        )
+        if interaction.response.is_done():
+            await interaction.edit_original_message(view=view)
+        else:
+            await interaction.response.edit_message(view=view)
 
     async def _cancel_button(self, interaction: discord.Interaction):
         if await confirm_view(
