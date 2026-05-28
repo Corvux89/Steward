@@ -6,11 +6,11 @@ from discord.ext import commands, tasks
 
 from Steward.bot import StewardBot
 from Steward.models.automation.context import AutomationContext
-from Steward.models.objects.auctionHouse import Item
 from Steward.models.objects.form import Application
 from Steward.models.objects.character import Character
 from Steward.models.objects.enum import RuleTrigger
 from Steward.models.objects.log import StewardLog
+from Steward.models.objects.market import Item, Shop, RaffleTicket
 from Steward.models.objects.patrol import Patrol
 from Steward.models.objects.player import Player
 from Steward.models.objects.request import Request
@@ -125,6 +125,10 @@ class RulesCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_auction_complete(self, item: Item, winner: Player, winning_bid: float, bids: list[tuple[Character, float]], reason: str):
+        pass
+
+    @commands.Cog.listener()
+    async def on_raffle_complete(self, shop: Shop, item: Item, winner: Character, tickets: list[RaffleTicket], reason: str):
         pass
 
     # Scheduled Rules Stuff

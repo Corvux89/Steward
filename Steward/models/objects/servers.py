@@ -23,14 +23,17 @@ if TYPE_CHECKING:
     from .activity import Activity
 
 class Server(discord.Guild):
-    def __init__(self, db: AsyncEngine, guild: discord.Guild, **kwargs):
+    def __init__(self, db: AsyncEngine, guild: Optional[discord.Guild], **kwargs):
         self._db = db
-        
-        for attr in guild.__slots__:
-            try:
-                setattr(self, attr, getattr(guild, attr))
-            except AttributeError:
-                pass
+
+        if guild is not None:
+            for attr in guild.__slots__:
+                try:
+                    setattr(self, attr, getattr(guild, attr))
+                except AttributeError:
+                    pass
+        else:
+            self.id = kwargs.get("id")
 
         self.max_level = kwargs.get("max_level", 3)
         self.currency_limit_expr = kwargs.get("currency_limit_expr", "10")
@@ -382,6 +385,8 @@ class Server(discord.Guild):
 
         for data in player_data:
             member = members_by_id.get(data["id"]) or self.get_member(data["id"])
+            if member is None:
+                continue
             player = Player(self._db, member, **data)
             player.characters = characters_by_player.get(data["id"], [])
             players.append(player)

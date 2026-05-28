@@ -27,6 +27,7 @@ from Steward.models.objects.request import Request
 from Steward.models.objects.form import FormTemplate, Application
 from Steward.models.objects.patrol import Patrol
 from Steward.models.objects.dashboards import CategoryDashboard
+from Steward.models.objects.market import Shop
 
 log = logging.getLogger(__name__)
 

@@ -9,7 +9,6 @@ from timeit import default_timer as timer
 
 from Steward.bot import StewardBot, StewardApplicationContext
 from Steward.models.objects.activityPoints import ActivityPoints
-from Steward.models.objects.auctionHouse import AuctionHouse, Item, Shelf
 from Steward.models.objects.dashboards import CategoryDashboard
 from Steward.models.objects.enum import RuleTrigger
 from Steward.models.objects.exceptions import StewardError
@@ -17,8 +16,8 @@ from Steward.models.objects.levels import Levels
 from Steward.models.objects.npc import NPC
 from Steward.models.objects.servers import Server
 from Steward.models.objects.activity import Activity
-from Steward.models.views.auctionHouse import AuctionHouseView
-from Steward.utils.autocompleteUtils import auction_house_autocomplete
+from Steward.models.objects.market import Item, Shelf, Shop
+from Steward.models.views.market import ShopView
 from Steward.utils.discordUtils import is_admin
 
 log = logging.getLogger(__name__)
@@ -76,8 +75,8 @@ class ServerCog(commands.Cog):
             value="dashboards"
         ),
         discord.OptionChoice(
-            "Auction Houses",
-            value="auction_houses"
+                "Shops",
+                value="shops"
         ),
         discord.OptionChoice(
             "All",
@@ -175,12 +174,26 @@ class ServerCog(commands.Cog):
                 )
             )
 
-        if config_item == "auction_houses" or config_item == "all":
+        if config_item == "shops" or config_item == "all":
             files.append(
                 discord.File(
-                    await self._auction_house_config(ctx.server),
-                    description="Auction Houses",
-                    filename="auction_houses.csv"
+                    await self._shop_config(ctx.server),
+                    description="Shops",
+                    filename="shops.csv"
+                )
+            )
+            files.append(
+                discord.File(
+                    await self._shop_inventory_config(ctx.server),
+                    description="Shop Inventory",
+                    filename="shop_inventory.csv"
+                )
+            )
+            files.append(
+                discord.File(
+                    await self._shop_shelves_config(ctx.server),
+                    description="Shop Shelves",
+                    filename="shop_shelves.csv"
                 )
             )
         
@@ -237,8 +250,14 @@ class ServerCog(commands.Cog):
             elif f_name_lower.startswith("dashboards"):
                 await self._dashboard_config(ctx.server, text)
 
-            elif f_name_lower.startswith("auction_houses") or f_name_lower.startswith("auction houses"):
-                await self._auction_house_config(ctx.server, text)
+            elif f_name_lower.startswith("shop_inventory"):
+                await self._shop_inventory_config(ctx.server, text)
+
+            elif f_name_lower.startswith("shop_shelves"):
+                await self._shop_shelves_config(ctx.server, text)
+
+            elif f_name_lower.startswith("shops"):
+                await self._shop_config(ctx.server, text)
 
             else:
                 return await ctx.respond("I don't know aht you're trying to do")
@@ -246,132 +265,6 @@ class ServerCog(commands.Cog):
         
         except Exception as e:
             raise StewardError(e)
-
-    @server_commands.command(
-        name="export_auction_inventory",
-        description="Export item inventory definitions for one auction house"
-    )
-    @commands.check(is_admin)
-    async def export_auction_inventory(
-        self,
-        ctx: "StewardApplicationContext",
-        auction_house: discord.Option(
-            str,
-            description="Auction house name or ID",
-            required=True,
-            autocomplete=auction_house_autocomplete
-        )
-    ):
-        await ctx.defer()
-
-        house = await self._resolve_auction_house_for_server(ctx.server, auction_house)
-
-        await ctx.respond(
-            file=discord.File(
-                await self._auction_inventory_config(house),
-                description=f"Auction Inventory - {house.name}",
-                filename=f"auction_inventory_{house.name}.csv"
-            )
-        )
-
-    @server_commands.command(
-        name="import_auction_inventory",
-        description="Import item inventory definitions for one auction house"
-    )
-    @commands.check(is_admin)
-    async def import_auction_inventory(
-        self,
-        ctx: "StewardApplicationContext",
-        auction_house: discord.Option(
-            str,
-            description="Auction house name or ID",
-            required=True,
-            autocomplete=auction_house_autocomplete
-        ),
-        file: discord.Option(
-            discord.SlashCommandOptionType.attachment,
-            description="CSV file to import",
-            required=True
-        )
-    ):
-        await ctx.defer()
-
-        if not file.filename.lower().endswith('.csv'):
-            raise StewardError("File must be a .csv file.")
-
-        house = await self._resolve_auction_house_for_server(ctx.server, auction_house)
-
-        try:
-            content = await file.read()
-            text = content.decode('utf-8')
-            await self._auction_inventory_config(house, text)
-        except Exception as e:
-            raise StewardError(e)
-
-        await ctx.respond(f"Successfully imported inventory for {house.name}.")
-
-    @server_commands.command(
-        name="export_auction_shelves",
-        description="Export shelf definitions for one auction house"
-    )
-    @commands.check(is_admin)
-    async def export_auction_shelves(
-        self,
-        ctx: "StewardApplicationContext",
-        auction_house: discord.Option(
-            str,
-            description="Auction house name or ID",
-            required=True,
-            autocomplete=auction_house_autocomplete
-        )
-    ):
-        await ctx.defer()
-
-        house = await self._resolve_auction_house_for_server(ctx.server, auction_house)
-
-        await ctx.respond(
-            file=discord.File(
-                await self._auction_shelves_config(house),
-                description=f"Auction Shelves - {house.name}",
-                filename=f"auction_shelves_{house.name}.csv"
-            )
-        )
-
-    @server_commands.command(
-        name="import_auction_shelves",
-        description="Import shelf definitions for one auction house"
-    )
-    @commands.check(is_admin)
-    async def import_auction_shelves(
-        self,
-        ctx: "StewardApplicationContext",
-        auction_house: discord.Option(
-            str,
-            description="Auction house name or ID",
-            required=True,
-            autocomplete=auction_house_autocomplete
-        ),
-        file: discord.Option(
-            discord.SlashCommandOptionType.attachment,
-            description="CSV file to import",
-            required=True
-        )
-    ):
-        await ctx.defer()
-
-        if not file.filename.lower().endswith('.csv'):
-            raise StewardError("File must be a .csv file.")
-
-        house = await self._resolve_auction_house_for_server(ctx.server, auction_house)
-
-        try:
-            content = await file.read()
-            text = content.decode('utf-8')
-            await self._auction_shelves_config(house, text)
-        except Exception as e:
-            raise StewardError(e)
-
-        await ctx.respond(f"Successfully imported shelves for {house.name}.")
 
     async def _server_config(self, server: Server, csv_text: str = None):
         header_mapping = {
@@ -449,7 +342,7 @@ class ServerCog(commands.Cog):
             await server.load_npcs()
 
         else:
-            schema = NPC.NPCSchema(self.bot.db)        
+            schema = NPC.NPCSchema(self.bot.db)
             output = io.StringIO()
             writer = csv.DictWriter(output, fieldnames=header_mapping.values(), quoting=csv.QUOTE_NONNUMERIC)
             writer.writeheader()
@@ -461,7 +354,7 @@ class ServerCog(commands.Cog):
 
             output.seek(0)
             return output
-    
+
     async def _activity_point_config(self, server: Server, csv_text: str = None):
         header_mapping = {
             "level": "Level",
@@ -481,7 +374,7 @@ class ServerCog(commands.Cog):
 
                 if not data.get('xp_expr'):
                     data['xp_expr'] = None
-                
+
                 if not data.get('currency_expr'):
                     data['currency_expr'] = None
 
@@ -501,14 +394,14 @@ class ServerCog(commands.Cog):
 
             output.seek(0)
             return output
-    
+
     async def _level_config(self, server: Server, csv_text: str = None):
         header_mapping = {
             "level": "Level",
             "xp": "Minimum XP",
             "tier": "Level Tier"
         }
-        
+
         if csv_text:
             await server.load_levels()
             reader = csv.DictReader(io.StringIO(csv_text))
@@ -548,7 +441,7 @@ class ServerCog(commands.Cog):
 
             output.seek(0)
             return output
-    
+
     async def _activities_config(self, server: Server, csv_text: str = None):
         header_mapping = {
             "name": "Name",
@@ -629,7 +522,6 @@ class ServerCog(commands.Cog):
                 data = {k: row.get(v) for k, v in header_mapping.items() if v in row}
                 data['guild_id'] = server.id
 
-                
                 if 'id' in data and data['id'] == '':
                     del data['id']
 
@@ -653,9 +545,8 @@ class ServerCog(commands.Cog):
 
                 if 'trigger' in data and data['trigger']:
                     data['trigger'] = RuleTrigger.from_string(data['trigger'])
-                
-            
-                existing_rule = await StewardRule.fetch(self.bot.db, server.id,  id=data['id'] if 'id' in data else None, name=data['name'])
+
+                existing_rule = await StewardRule.fetch(self.bot.db, server.id, id=data['id'] if 'id' in data else None, name=data['name'])
                 if existing_rule:
                     existing_rule.update(data)
                     rule = existing_rule
@@ -670,10 +561,10 @@ class ServerCog(commands.Cog):
             writer.writeheader()
 
             rules = await StewardRule.get_all_rules_for_server(
-                self.bot.db, 
+                self.bot.db,
                 server.id
             )
-            
+
             for rule in rules:
                 data = schema.dump(rule)
                 row = {}
@@ -688,13 +579,13 @@ class ServerCog(commands.Cog):
 
             output.seek(0)
             return output
-        
+
     async def _form_config(self, server: Server, csv_text: str = None):
         from Steward.models.objects.form import FormTemplate
 
         header_mapping = {
             "name": "Name",
-            "content": "Content",  # Changed from "fields" to "content" to match FormTemplate
+            "content": "Content",
             "character_specific": "Character Specific?"
         }
 
@@ -735,13 +626,233 @@ class ServerCog(commands.Cog):
             for application in applications:
                 data = schema.dump(application)
                 row = {}
-                
+
                 for k, v in header_mapping.items():
                     if k == 'content':
                         row[v] = json.dumps(data.get(k, []))
                     else:
                         row[v] = data.get(k)
                 writer.writerow(row)
+
+            output.seek(0)
+            return output
+
+    async def _shop_config(self, server: Server, csv_text: str = None):
+        header_mapping = {
+            "id": "Shop ID",
+            "key": "Key",
+            "name": "Name",
+            "description": "Description",
+            "channel_id": "Channel ID",
+            "ticket_cost": "Ticket Cost",
+            "max_tickets": "Max Tickets",
+            "raffle_duration": "Raffle Duration (Hours)",
+        }
+
+        shops = await Shop.fetch_by_guild(self.bot, server.id, load_related=False)
+
+        if csv_text:
+            reader = csv.DictReader(io.StringIO(csv_text))
+            rows = list(reader)
+            retained_ids = set()
+            by_id = {str(shop.id): shop for shop in shops if shop.id}
+            by_key = {shop.key.lower(): shop for shop in shops if shop.key}
+
+            for row in rows:
+                data = {k: row.get(v) for k, v in header_mapping.items() if v in row}
+                incoming_id = self._parse_optional_uuid(data.get("id"))
+                incoming_key = self._normalize_csv_value(data.get("key"))
+                incoming_name = self._normalize_csv_value(data.get("name"))
+
+                if not incoming_key:
+                    raise StewardError("Shop Key is required.")
+                if not incoming_name:
+                    raise StewardError("Shop Name is required.")
+
+                shop = by_id.get(str(incoming_id)) if incoming_id else None
+                if not shop:
+                    shop = by_key.get(incoming_key.lower())
+
+                is_new = shop is None
+                if not shop:
+                    shop = Shop(self.bot, guild_id=server.id)
+
+                shop.key = incoming_key
+                shop.name = incoming_name
+                shop.description = self._normalize_csv_value(data.get("description"))
+                shop.guild_id = server.id
+                shop.channel_id = self._parse_required_int(data.get("channel_id"), "Channel ID")
+                shop.ticket_cost = self._parse_optional_float(data.get("ticket_cost")) or 1
+                shop.max_tickets = self._parse_optional_int(data.get("max_tickets")) or 1
+                shop.raffle_duration = self._parse_optional_float(data.get("raffle_duration"))
+
+                shop = await shop.upsert()
+
+                if is_new:
+                    shop = await Shop.fetch_by_id(self.bot, shop.id, load_related=True)
+                    channel = shop.channel
+                    if not isinstance(channel, discord.TextChannel):
+                        raise StewardError(f"Unable to resolve text channel for shop '{shop.name}'.")
+                    message = await channel.send(view=ShopView(shop))
+                    shop.message_id = message.id
+                    shop = await shop.upsert()
+
+                retained_ids.add(shop.id)
+
+            for shop in shops:
+                if shop.id not in retained_ids:
+                    await self._delete_shop(shop)
+
+        else:
+            schema = Shop.ShopSchema(self.bot)
+            output = io.StringIO()
+            writer = csv.DictWriter(output, fieldnames=header_mapping.values(), quoting=csv.QUOTE_NONNUMERIC)
+            writer.writeheader()
+
+            for shop in shops:
+                data = schema.dump(shop)
+                row = {header_mapping[k]: v for k, v in data.items() if k in header_mapping}
+                writer.writerow(row)
+
+            output.seek(0)
+            return output
+
+    async def _shop_inventory_config(self, server: Server, csv_text: str = None):
+        header_mapping = {
+            "id": "Item ID",
+            "shop_keys": "Shop Keys",
+            "name": "Name",
+            "description": "Description",
+            "cost": "Cost",
+            "category": "Category",
+            "max_qty": "Max Quantity"
+        }
+
+        items = await Item.fetch_by_guild(self.bot.db, server.id)
+
+        if csv_text:
+            reader = csv.DictReader(io.StringIO(csv_text))
+            rows = list(reader)
+            retained_item_ids = set()
+            existing_items_by_id = {str(item.id): item for item in items if item.id}
+            existing_items_by_name = {item.name.lower(): item for item in items if item.name}
+
+            for row in rows:
+                data = {k: row.get(v) for k, v in header_mapping.items() if v in row}
+                incoming_id = self._parse_optional_uuid(data.get("id"))
+                incoming_name = self._normalize_csv_value(data.get("name"))
+
+                if not incoming_name:
+                    raise StewardError("Inventory item Name is required.")
+
+                item = existing_items_by_id.get(str(incoming_id)) if incoming_id else None
+                if not item:
+                    item = existing_items_by_name.get(incoming_name.lower())
+                if not item:
+                    item = Item(self.bot.db, guild_id=server.id)
+
+                item.guild_id = server.id
+                item.shop_keys = self._parse_optional_string_list(data.get("shop_keys"))
+                item.name = incoming_name
+                item.description = self._normalize_csv_value(data.get("description"))
+                item.cost = self._parse_required_float(data.get("cost"), "Cost")
+                item.category = self._normalize_csv_value(data.get("category"))
+                item.max_qty = self._parse_optional_int(data.get("max_qty"))
+
+                item = await item.upsert()
+                retained_item_ids.add(item.id)
+
+            shops = await Shop.fetch_by_guild(self.bot, server.id, load_related=True)
+            for item in items:
+                if item.id not in retained_item_ids:
+                    for shop in shops:
+                        for stock_item in list(shop.stock):
+                            if stock_item.item_id == item.id:
+                                await stock_item.delete()
+                    await item.delete()
+
+        else:
+            schema = Item.ItemSchema(self.bot.db)
+            output = io.StringIO()
+            writer = csv.DictWriter(output, fieldnames=header_mapping.values(), quoting=csv.QUOTE_NONNUMERIC)
+            writer.writeheader()
+
+            for item in items:
+                data = schema.dump(item)
+                row = {header_mapping[k]: v for k, v in data.items() if k in header_mapping}
+                row["Shop Keys"] = ", ".join(data.get("shop_keys", []))
+                writer.writerow(row)
+
+            output.seek(0)
+            return output
+
+    async def _shop_shelves_config(self, server: Server, csv_text: str = None):
+        header_mapping = {
+            "id": "Shelf ID",
+            "shop_key": "Shop Key",
+            "priority": "Priority",
+            "description": "Description",
+            "max_qty": "Max Quantity"
+        }
+
+        shops = await Shop.fetch_by_guild(self.bot, server.id, load_related=True)
+        shelves = [shelf for shop in shops for shelf in shop.shelves]
+        shops_by_key = {shop.key.lower(): shop for shop in shops if shop.key}
+
+        if csv_text:
+            reader = csv.DictReader(io.StringIO(csv_text))
+            rows = list(reader)
+            retained_shelf_ids = set()
+            existing_shelves_by_id = {str(shelf.id): shelf for shelf in shelves if shelf.id}
+            existing_shelves_by_shop_and_priority = {(shelf.shop_id, shelf.priority): shelf for shelf in shelves}
+
+            for row in rows:
+                data = {k: row.get(v) for k, v in header_mapping.items() if v in row}
+                incoming_id = self._parse_optional_uuid(data.get("id"))
+                incoming_shop_key = self._normalize_csv_value(data.get("shop_key"))
+                incoming_priority = self._parse_required_int(data.get("priority"), "Priority")
+
+                if not incoming_shop_key:
+                    raise StewardError("Shop Key is required for shelves.")
+
+                shop = shops_by_key.get(incoming_shop_key.lower())
+                if not shop:
+                    raise StewardError(f"Unknown shop key '{incoming_shop_key}'.")
+
+                shelf = existing_shelves_by_id.get(str(incoming_id)) if incoming_id else None
+                if not shelf:
+                    shelf = existing_shelves_by_shop_and_priority.get((shop.id, incoming_priority))
+                if not shelf:
+                    shelf = Shelf(self.bot.db, shop_id=shop.id)
+
+                shelf.shop_id = shop.id
+                shelf.priority = incoming_priority
+                shelf.description = self._normalize_csv_value(data.get("description"))
+                shelf.max_qty = self._parse_required_int(data.get("max_qty"), "Max Quantity")
+
+                shelf = await shelf.upsert()
+                retained_shelf_ids.add(shelf.id)
+
+            for shop in shops:
+                for shelf in list(shop.shelves):
+                    if shelf.id not in retained_shelf_ids:
+                        for stock_item in list(shop.stock):
+                            if stock_item.shelf_id == shelf.id:
+                                await stock_item.delete()
+                        await shelf.delete()
+
+        else:
+            schema = Shelf.ShelfSchema(self.bot.db)
+            output = io.StringIO()
+            writer = csv.DictWriter(output, fieldnames=header_mapping.values(), quoting=csv.QUOTE_NONNUMERIC)
+            writer.writeheader()
+
+            for shop in shops:
+                for shelf in shop.shelves:
+                    data = schema.dump(shelf)
+                    row = {header_mapping[k]: v for k, v in data.items() if k in header_mapping}
+                    row["Shop Key"] = shop.key
+                    writer.writerow(row)
 
             output.seek(0)
             return output
@@ -816,275 +927,18 @@ class ServerCog(commands.Cog):
             output.seek(0)
             return output
 
-    async def _auction_house_config(self, server: Server, csv_text: str = None):
-        header_mapping = {
-            "id": "House ID",
-            "name": "Name",
-            "channel_id": "Channel ID",
-            "min_bid_percent": "Minimum Bid %",
-            "auction_length": "Auction Length (Hours)",
-            "reroll_interval": "Reroll Interval (Hours)"
-        }
-
-        houses = [h for h in (await AuctionHouse.fetch_all(self.bot, load_related=True)) if h.guild_id == server.id]
-
-        if csv_text:
-            reader = csv.DictReader(io.StringIO(csv_text))
-            rows = list(reader)
-            retained_house_ids = set()
-            by_id = {str(house.id): house for house in houses if house.id}
-            by_name = {house.name.lower(): house for house in houses if house.name}
-
-            for row in rows:
-                data = {k: row.get(v) for k, v in header_mapping.items() if v in row}
-                incoming_id = self._parse_optional_uuid(data.get("id"))
-                incoming_name = self._normalize_csv_value(data.get("name"))
-
-                if not incoming_name:
-                    raise StewardError("Auction house Name is required.")
-
-                incoming_channel_id = self._parse_required_int(data.get("channel_id"), "Channel ID")
-
-                house = None
-                if incoming_id:
-                    house = by_id.get(str(incoming_id))
-                if not house:
-                    house = by_name.get(incoming_name.lower())
-
-                is_new_house = house is None
-
-                if not house:
-                    house = AuctionHouse(
-                        self.bot,
-                        guild_id=server.id,
-                        message_id=0
-                    )
-
-                house.name = incoming_name
-                house.guild_id = server.id
-                house.channel_id = incoming_channel_id
-                house.min_bid_percent = self._parse_optional_float(data.get("min_bid_percent"))
-                house.auction_length = self._parse_optional_float(data.get("auction_length"))
-                house.reroll_interval = self._parse_optional_float(data.get("reroll_interval"))
-
-                house = await house.upsert()
-
-                if is_new_house:
-                    house = await self._initialize_auction_house_message(house)
-
-                retained_house_ids.add(house.id)
-
-            for house in houses:
-                if house.id not in retained_house_ids:
-                    await self._delete_auction_house(house)
-
-        else:
-            schema = AuctionHouse.AuctionHouseSchema(self.bot)
-            output = io.StringIO()
-            writer = csv.DictWriter(output, fieldnames=header_mapping.values(), quoting=csv.QUOTE_NONNUMERIC)
-            writer.writeheader()
-
-            for house in houses:
-                data = schema.dump(house)
-                row = {header_mapping[k]: v for k, v in data.items() if k in header_mapping}
-                writer.writerow(row)
-
-            output.seek(0)
-            return output
-
-    async def _auction_inventory_config(self, house: AuctionHouse, csv_text: str = None):
-        header_mapping = {
-            "id": "Item ID",
-            "name": "Name",
-            "description": "Description",
-            "cost": "Cost",
-            "category": "Category",
-            "max_qty": "Max Quantity",
-            "min_qty": "Min Quantity",
-            "min_bid": "Min Bid"
-        }
-
-        refreshed_house = await AuctionHouse.fetch_by_id(self.bot, house.id, load_related=True)
-        if not refreshed_house:
-            raise StewardError("Auction house not found.")
-
-        if csv_text:
-            reader = csv.DictReader(io.StringIO(csv_text))
-            rows = list(reader)
-            retained_item_ids = set()
-            existing_items_by_id = {str(item.id): item for item in refreshed_house.items if item.id}
-            existing_items_by_name = {item.name.lower(): item for item in refreshed_house.items if item.name}
-
-            for row in rows:
-                data = {k: row.get(v) for k, v in header_mapping.items() if v in row}
-                incoming_id = self._parse_optional_uuid(data.get("id"))
-                incoming_name = self._normalize_csv_value(data.get("name"))
-
-                if not incoming_name:
-                    raise StewardError("Inventory item Name is required.")
-
-                item = None
-                if incoming_id:
-                    item = existing_items_by_id.get(str(incoming_id))
-                    # Validate that the item belongs to this house (which belongs to this guild)
-                    if item and item.house_id != refreshed_house.id:
-                        raise StewardError(f"Item ID {incoming_id} does not belong to auction house '{refreshed_house.name}'.")
-                if not item:
-                    item = existing_items_by_name.get(incoming_name.lower())
-
-                if not item:
-                    item = Item(self.bot.db, house_id=refreshed_house.id)
-
-                item.house_id = refreshed_house.id
-                item.name = incoming_name
-                item.description = self._normalize_csv_value(data.get("description"))
-                item.cost = self._parse_required_float(data.get("cost"), "Cost")
-                item.category = self._normalize_csv_value(data.get("category"))
-                item.max_qty = self._parse_optional_int(data.get("max_qty"))
-                item.min_qty = self._parse_optional_int(data.get("min_qty"))
-                item.min_bid = self._parse_optional_int(data.get("min_bid"))
-
-                item = await item.upsert()
-                retained_item_ids.add(item.id)
-
-            for item in refreshed_house.items:
-                if item.id not in retained_item_ids:
-                    for inventory_item in list(refreshed_house.inventory):
-                        if inventory_item.item_id == item.id:
-                            await inventory_item.delete()
-                    await item.delete()
-
-        else:
-            schema = Item.ItemSchema(self.bot.db)
-            output = io.StringIO()
-            writer = csv.DictWriter(output, fieldnames=header_mapping.values(), quoting=csv.QUOTE_NONNUMERIC)
-            writer.writeheader()
-
-            for item in refreshed_house.items:
-                data = schema.dump(item)
-                row = {header_mapping[k]: v for k, v in data.items() if k in header_mapping}
-                writer.writerow(row)
-
-            output.seek(0)
-            return output
-
-    async def _auction_shelves_config(self, house: AuctionHouse, csv_text: str = None):
-        header_mapping = {
-            "id": "Shelf ID",
-            "priority": "Priority",
-            "notes": "Notes",
-            "max_qty": "Max Quantity"
-        }
-
-        refreshed_house = await AuctionHouse.fetch_by_id(self.bot, house.id, load_related=True)
-        if not refreshed_house:
-            raise StewardError("Auction house not found.")
-
-        if csv_text:
-            reader = csv.DictReader(io.StringIO(csv_text))
-            rows = list(reader)
-            retained_shelf_ids = set()
-            existing_shelves_by_id = {str(shelf.id): shelf for shelf in refreshed_house.shelves if shelf.id}
-            existing_shelves_by_priority = {shelf.priority: shelf for shelf in refreshed_house.shelves}
-
-            for row in rows:
-                data = {k: row.get(v) for k, v in header_mapping.items() if v in row}
-                incoming_id = self._parse_optional_uuid(data.get("id"))
-                incoming_priority = self._parse_required_int(data.get("priority"), "Priority")
-
-                shelf = None
-                if incoming_id:
-                    shelf = existing_shelves_by_id.get(str(incoming_id))
-                    # Validate that the shelf belongs to this house (which belongs to this guild)
-                    if shelf and shelf.house_id != refreshed_house.id:
-                        raise StewardError(f"Shelf ID {incoming_id} does not belong to auction house '{refreshed_house.name}'.")
-                if not shelf:
-                    shelf = existing_shelves_by_priority.get(incoming_priority)
-
-                if not shelf:
-                    shelf = Shelf(self.bot.db, house_id=refreshed_house.id)
-
-                shelf.house_id = refreshed_house.id
-                shelf.priority = incoming_priority
-                shelf.notes = self._normalize_csv_value(data.get("notes"))
-                shelf.max_qty = self._parse_required_int(data.get("max_qty"), "Max Quantity")
-
-                shelf = await shelf.upsert()
-                retained_shelf_ids.add(shelf.id)
-                existing_shelves_by_priority[shelf.priority] = shelf
-
-            for shelf in refreshed_house.shelves:
-                if shelf.id not in retained_shelf_ids:
-                    for inventory_item in list(refreshed_house.inventory):
-                        if inventory_item.shelf_id == shelf.id:
-                            await inventory_item.delete()
-                    await shelf.delete()
-
-        else:
-            schema = Shelf.ShelfSchema(self.bot.db)
-            output = io.StringIO()
-            writer = csv.DictWriter(output, fieldnames=header_mapping.values(), quoting=csv.QUOTE_NONNUMERIC)
-            writer.writeheader()
-
-            for shelf in refreshed_house.shelves:
-                data = schema.dump(shelf)
-                row = {header_mapping[k]: v for k, v in data.items() if k in header_mapping}
-                writer.writerow(row)
-
-            output.seek(0)
-            return output
-
-    async def _resolve_auction_house_for_server(self, server: Server, auction_house: str) -> AuctionHouse:
-        houses = [h for h in (await AuctionHouse.fetch_all(self.bot, load_related=True)) if h.guild_id == server.id]
-        if not houses:
-            raise StewardError("No auction houses found for this server.")
-
-        normalized = auction_house.strip()
-
-        try:
-            incoming_id = uuid.UUID(normalized)
-        except ValueError:
-            incoming_id = None
-
-        if incoming_id:
-            house = next((h for h in houses if h.id == incoming_id), None)
-            if house:
-                return house
-
-        house = next((h for h in houses if h.name.lower() == normalized.lower()), None)
-        if house:
-            return house
-
-        raise StewardError(f"No auction house found matching '{auction_house}'.")
-
-    async def _initialize_auction_house_message(self, house: AuctionHouse) -> AuctionHouse:
-        house = await AuctionHouse.fetch_by_id(self.bot, house.id, load_related=True)
-        if not house:
-            raise StewardError("Auction house not found.")
-
-        channel = house.channel
-        if not isinstance(channel, discord.TextChannel):
-            raise StewardError(f"Unable to resolve text channel for auction house '{house.name}'.")
-
-        message = await channel.send(view=AuctionHouseView(house))
-        house.message_id = message.id
-        return await house.upsert()
-
-    async def _delete_auction_house(self, house: AuctionHouse):
-        house = await AuctionHouse.fetch_by_id(self.bot, house.id, load_related=True)
-        if not house:
+    async def _delete_shop(self, shop: Shop):
+        shop = await Shop.fetch_by_id(self.bot, shop.id, load_related=True)
+        if not shop:
             return
 
-        for inventory_item in list(house.inventory):
-            await inventory_item.delete()
+        for stock_item in list(shop.stock):
+            await stock_item.delete()
 
-        for item in list(house.items):
-            await item.delete()
-
-        for shelf in list(house.shelves):
+        for shelf in list(shop.shelves):
             await shelf.delete()
 
-        await house.delete()
+        await shop.delete()
 
     @staticmethod
     def _normalize_csv_value(value):
@@ -1119,6 +973,14 @@ class ServerCog(commands.Cog):
             return int(normalized)
         except ValueError:
             raise StewardError(f"Expected integer value. Got '{value}'.")
+
+    def _parse_optional_string_list(self, value):
+        normalized = self._normalize_csv_value(value)
+        if normalized is None:
+            return []
+
+        cleaned = normalized.strip("[]")
+        return [part.strip().strip("\"'") for part in cleaned.split(",") if part.strip()]
 
     def _parse_required_float(self, value, field_name: str):
         normalized = self._normalize_csv_value(value)
