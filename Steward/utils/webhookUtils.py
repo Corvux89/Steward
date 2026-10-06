@@ -38,6 +38,9 @@ async def handle_character_mentions(webhook: "StewardWebhook") -> None:
 
     for mention in char_mentions:
         matches = find_character_by_name(mention, characters)
+        # Normalize for inactive players/characters
+        member_map = {c: webhook.ctx.server.get_member(c.player_id) for c in matches if webhook.ctx.server.get_member(c.player_id)}
+        matches = [c for c in matches if c in member_map]
 
         mention_char = None
 
@@ -45,7 +48,6 @@ async def handle_character_mentions(webhook: "StewardWebhook") -> None:
             mention_char = matches[0]
         elif len(matches) > 1:
             # Cache member lookups
-            member_map = {c: webhook.ctx.server.get_member(c.player_id) for c in matches}
             choices = [
                 f"{c.name} [{member.display_name}]"
                 for c, member in member_map.items()
